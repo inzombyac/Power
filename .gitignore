@@ -45,3 +45,8 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+power.ini
+logging/power.log
+logging/files.txt
+logging/sab.xml
+logging/requests.txt
