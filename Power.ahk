@@ -111,6 +111,7 @@ schedule = No
 SAB = No
 WHS = No
 MB = No
+EMBYREC = No
 FormatTime, cur_hour,,HH
 filelist=
 proc_block=No
@@ -237,11 +238,36 @@ Loop, parse, Emby_state, `,
 		running++
 		StringReplace, temp_temp_MB, word_array2,",, All 
 		;"
-		temp_MB=%temp_temp_MB%/%temp_MB%
+		if (temp_MB != "")
+			temp_MB=%temp_temp_MB%/%temp_MB%
+		else
+			temp_MB=%temp_temp_MB%
 	}
 }
 if (temp_MB != "")
 	MB=%temp_MB%
+
+recordingcount:=0	
+Loop, parse, Emby_rec_state, `,
+{
+	IfInstring, A_LoopField, TotalRecordCount
+	{
+		StringReplace, recordingcount, A_Loopfield,`},
+		Loop, parse, recordingcount, :
+		{
+			recordingcount=%A_LoopField%
+		}
+		;MsgBox, %recordingcount%
+	}
+}
+if (recordingcount != 0) 
+{
+	running++
+	EMBYREC=Yes
+} else {
+	EMBYREC=No
+}
+
 	
 tfilelist=
 Loop,Read,%Settings_Path%\logging\files.txt 
@@ -386,6 +412,7 @@ if (Visible = 1)
 	GuiControl,, MBT,%MB%
 	GuiControl,, VPIT,%VPI%
 	GuiControl,, WHST,%WHS%
+	GuiControl,, EMBYRECT,%EMBYREC%
 	GuiControl,, psfileT,%psfile%
 	GuiControl,, scheduleT,%schedule%
 	GuiControl,, MyEdit,%requests%
@@ -520,6 +547,9 @@ If (Visible =1) {
 	Gui, Add, Text,xs,Emby sessions: 
 	Gui, Font,,
 	Gui, Add, Text,xm+180 yp vMBT w50,%MB%
+	Gui, Add, Text,xs,Emby Recordings: 
+	Gui, Font,,
+	Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
 	Gui, Font,Bold,
 	Gui, Add, Text,xs yp+20,PowerCfg: 
 	Gui, Font,,
