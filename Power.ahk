@@ -159,6 +159,8 @@ if (SABnzbd = 1) {
 if (Emby = 1) {
 	UrlDownloadToFile, %Emby_URL%/emby/emby/Sessions?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby.txt
 	FileRead, Emby_state, %Settings_Path%\logging\emby.txt
+	UrlDownloadToFile, %Emby_URL%/LiveTv/Recordings?api_key=%Emby_API%&format=json&IsInProgress=1, %Settings_Path%\logging\emby_rec.txt
+	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.txt
 }
 
 
@@ -203,30 +205,6 @@ if (VPIdle =1) {
 		
 	}
 }
-
-IfInstring, requests, [Process] 
-{
-	if (!A_iscompiled)
-	{
-		IfNotInstring, requests, autohotkey.exe
-		{
-			running++
-			proc_req = Yes
-		}
-		else
-			proc_req = No
-	} else {
-		IfNotInstring, requests, Power.exe
-		{
-			running++
-			proc_req = Yes
-		}
-		else
-			proc_req = No
-	}
-}
-else
-	proc_req = No
 
 if (WHS_Backup = 1) 
 {
@@ -274,6 +252,9 @@ Loop,Read,%Settings_Path%\logging\files.txt
 			tfilelist = %A_LoopReadLine%`r`n%tfilelist%
 	}
 }
+
+; Any process requesting the system is allowed.  Exclude for this application
+proc_req = No
 Loop,Read,%Settings_Path%\logging\requests.txt 
 {
 	if A_LoopReadLine contains %Extensions%
@@ -287,7 +268,31 @@ Loop,Read,%Settings_Path%\logging\requests.txt
 			tfilelist = %temp%`r`n%tfilelist%
 		}
 	}
+	if A_LoopReadLine contains [PROCESS]
+	{
+		if (!A_iscompiled)
+		{
+			IfNotInstring, A_LoopReadLine, autohotkey.exe
+			{
+				running++
+				proc_req = Yes
+				StringSplit, Array, A_LoopReadLine,\,
+				LastItem:=Array%Array0%
+				plist = %plist% %LastItem%
+			}
+		} else {
+			IfNotInstring, A_LoopReadLine, Power.exe
+			{
+				running++
+				proc_req = Yes
+				StringSplit, Array, A_LoopReadLine,\,
+				LastItem:=Array%Array0%
+				plist = %plist% %LastItem%
+			}
+		}
+	}
 }
+
 Sort, tfilelist, U
 filelist=%tfilelist%
 temp_file:=0
@@ -406,25 +411,18 @@ if perc = 100
 		IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
 		IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
 	}
-	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-	FileAppend, %timestart% - Going to Sleep`r`n, %Settings_Path%\logging\power.log
-	GoSub, Reset
-	DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
-	Sleep, %RefreshInt%
-	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-	FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
+	GoSub, SLEEP
 }
 Return
 
 SLEEP:
 FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
-GoSub, Reset
-DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
+RunWait, sleep.exe
 Sleep, %RefreshInt%
 FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
-Reload
+GoSub, Reset
 Return
 
 UpdateOSD:
@@ -437,7 +435,7 @@ if (perc > 100 || perc < 0) {
 	TrayTip
 	return
 }
-If (on = 1) {
+If (on = 1 or var < 30) {
 	if (round > 3 ) {
 		if (ShowTray = 1) {
 			TrayTip, Power, Time Remaining: %var%, 30,2
