@@ -7,8 +7,10 @@ if not A_IsAdmin {
 
 ES_CONTINUOUS:=0x80000000
 ES_SYSTEM_REQUIRED:=0x00000001
-; Tell the OS to enable awaymode and prevent automatic sleep
-DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS | ES_SYSTEM_REQUIRED )
+ES_AWAYMODE_REQUIRED:=0x00000040
+; Tell the OS to prevent automatic sleep
+; Don't use awaymode
+DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
 
 ;DllCall( "SetThreadExecutionState", UInt,0x80000003 )
 ;  Need to run  Openfiles.exe /local on first to see files that are open
@@ -877,6 +879,7 @@ Edit
 return
 
 Exit:
+DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
 ExitApp
 Return
 ;
