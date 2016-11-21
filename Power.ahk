@@ -232,44 +232,48 @@ else
 
 MB=No
 temp_MB=
-Loop, parse, Emby_state, `,
-{
-	IfInstring, A_LoopField, UserName
-	{
-		StringSplit, word_array, A_LoopField, :
-		running++
-		StringReplace, temp_temp_MB, word_array2,",, All 
-		;"
-		if (temp_MB != "")
-			temp_MB=%temp_temp_MB%/%temp_MB%
-		else
-			temp_MB=%temp_temp_MB%
-	}
-}
-if (temp_MB != "")
-	MB=%temp_MB%
 
-recordingcount:=0	
-Loop, parse, Emby_rec_state, `,
-{
-	IfInstring, A_LoopField, TotalRecordCount
+if (Emby = 1) {
+	Loop, parse, Emby_state, `,
 	{
-		StringReplace, recordingcount, A_Loopfield,`},
-		Loop, parse, recordingcount, :
+		IfInstring, A_LoopField, UserName
 		{
-			recordingcount=%A_LoopField%
+			StringSplit, word_array, A_LoopField, :
+			running++
+			StringReplace, temp_temp_MB, word_array2,",, All 
+			;"
+			if (temp_MB != "")
+				temp_MB=%temp_temp_MB%/%temp_MB%
+			else
+				temp_MB=%temp_temp_MB%
 		}
-		;MsgBox, %recordingcount%
 	}
-}
-if (recordingcount != 0) 
-{
-	running++
-	EMBYREC=Yes
+	if (temp_MB != "")
+		MB=%temp_MB%
+
+	recordingcount:=0	
+	Loop, parse, Emby_rec_state, `,
+	{
+		IfInstring, A_LoopField, TotalRecordCount
+		{
+			StringReplace, recordingcount, A_Loopfield,`},
+			Loop, parse, recordingcount, :
+			{
+				recordingcount=%A_LoopField%
+			}
+			;MsgBox, %recordingcount%
+		}
+	}
+	if (recordingcount != 0) 
+	{
+		running++
+		EMBYREC=Yes
+	} else {
+		EMBYREC=No
+	}
 } else {
 	EMBYREC=No
 }
-
 	
 tfilelist=
 Loop,Read,%Settings_Path%\logging\files.txt 
@@ -354,7 +358,7 @@ if (VPIdle = 1) {
 	}
 	if ((vpproc = 0 )&& (TimeIdle > WMCDelay)) 
 	{
-		MsgBox,0,Warning,Windows will now go to sleep,3
+		;MsgBox,0,Warning,Windows will now go to sleep,3
 		GoSub, SLEEP	
 	} else if (vpproc >0)
 		running++
@@ -363,7 +367,7 @@ if (proc_block_aon = "Yes") {
 	GoSub, Reset
 	if (schedule = "Yes")
 		Menu, Tray, Icon, running.ico
-	else if (running > 0)
+	else
 		Menu, Tray, Icon, normal.ico
 
 } else if (sleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) 
@@ -373,13 +377,13 @@ if (proc_block_aon = "Yes") {
 		GoSub, Reset
 		if (schedule = "Yes")
 			Menu, Tray, Icon, running.ico
-		else if (running > 0)
+		else 
 			Menu, Tray, Icon, normal.ico
 	} else if ((aonSAB = 1) && (SAB = "Yes")) {
 		GoSub, Reset
 		if (schedule = "Yes")
 			Menu, Tray, Icon, running.ico
-		else if (running > 0)
+		else 
 			Menu, Tray, Icon, normal.ico
 	} else {
 		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm 
@@ -393,7 +397,7 @@ if (proc_block_aon = "Yes") {
 	GoSub, Reset
 	if (schedule = "Yes")
 		Menu, Tray, Icon, running.ico
-	else if (running > 0)
+	else
 		Menu, Tray, Icon, normal.ico
 	
 } else {
@@ -433,7 +437,7 @@ return
 TimerLoop:
 if perc = 100
 {
-	MsgBox,0,Warning,Windows will now go to sleep,3
+	;MsgBox,0,Warning,Windows will now go to sleep,3
 	if (Visible = 1)
 	{
 		WinGetPos, xPos, yPos, winW, winH, Power
@@ -468,6 +472,8 @@ If (on = 1 or var < 30) {
 	if (round > 3 ) {
 		if (ShowTray = 1) {
 			TrayTip, Power, Time Remaining: %var%, 30,2
+			;FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+			;FileAppend, %timestart% - Idle detected`r`n, %Settings_Path%\logging\power.log
 		}
 	} else {
 		round++
@@ -664,7 +670,7 @@ If (Visible =1) {
 	else 
 		Gui, Add, Checkbox,xs+130 ys vWHS_Backup,
 	Gui, Add, Edit, vDelay r1 w100 yp+25, %Delay%
-	Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (s):
+	Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
 	Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
 	
 	if (ShowTray=1)
