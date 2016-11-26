@@ -119,7 +119,8 @@ filelist=
 proc_block=No
 proc_block_aon=No
 last_log=
-
+Max_Width=%A_ScreenWidth%
+Max_Height=%A_ScreenHeight%
 
 ; Tray Menu
 GoSub, TRAYMENU
@@ -458,6 +459,16 @@ FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
 GoSub, Reset
 Return
 
+SLEEPNOW:
+FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
+DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
+Sleep, %RefreshInt%
+FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
+GoSub, Reset
+Return
+
 UpdateOSD:
 mysec := EndTime
 EnvSub, mysec, %A_Now%, seconds
@@ -527,215 +538,218 @@ GoSub, Reset
 Return
 
 SETTINGS:
-FileRead, requests, %Settings_Path%\logging\requests.txt
 Gui, destroy
-If (Visible =1) {
-	Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings
-	Gui, Font,,
-	Gui, Font,Bold,
-	Gui, Add, Text,section,Last Event: 
-	Gui, Font,,
-	Gui, Add, Text,xm+100 yp vLastEvent w400,%last_log%
-	Gui, Font,,
-	Gui, Add, Text,xs,Processes: 
-	Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
-	Gui, Font,,
-	Gui, Add, Text,xs,PowerCfg Processes: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vproc_reqT w50,%proc_req%
-	Gui, Font,,
-	Gui, Add, Text,xs,Custom/Always on Processes: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vaonprocessT w50,%proc_block%/%proc_block_aon%
-	Gui, Font,,
-	Gui, Add, Text,xs,Shared Media: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
-	Gui, Font,,
-	Gui, Add, Text,xs,Emby sessions: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vMBT w50,%MB%
-	Gui, Add, Text,xs,Emby Recordings: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
-	Gui, Font,Bold,
-	Gui, Add, Text,xs yp+20,PowerCfg: 
-	Gui, Font,,
-	Gui, Font,, Consolas
-	Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
-	Gui, Font,,
-	Gui, Font,Bold,
-	Gui, Add, Text,xs,File Requests:
-	Gui, Font,,
-	Gui, Font,, Consolas
-	Gui, Add, Edit, w560 r7 +Readonly -VScroll vFileListGUI section, %filelist%
-	Gui, Font,,
-	
-	; Column 2
-	Gui, Font,,
-	Gui, Add, Text,section xp+280 ym+72,Schedule: 
-	Gui, Font,,
-	Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
-	Gui, Font,,
-	Gui, Add, Text,xs,WHS backup on: 
-	Gui, Font,,
-	Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
-	Gui, Font,,
-	Gui, Add, Text,xs,SABnzbd downloading: 
-	Gui, Font,,
-	Gui, Add, Text,xp+150 yp vSABT w50,%SAB%
-	Gui, Font,,
-	Gui, Add, Text,xs,Video player on: 
-	Gui, Font,,
-	Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
-	Gui, Font,,
-	
-	Gui, Tab, 2
-	Gui, Font,Bold,
-	Gui, Add, Text,,Scheduling:
-	Gui, Font,,
-	Gui, Add, Text,,Always On Schedule:
-	Gui, Add, Text,yp+43,Forced Sleep Schedule:
-	Gui, Add, Text,,
-	Gui, Font,Bold,
-	Gui, Add, Text,,Keep Awake Monitoring Settings:
-	Gui, Font,,
-	Gui, Add, Text,section,Monitor WHS Backups:
-	Gui, Add, Text,,Idle Before Standby: 
-	Gui, Add, Text,,Show Tray Tip:
-	Gui, Add, Text,,Monitor Shared Files:
-	Gui, Add, Text,,Extensions to Monitor:
-	Gui, Add, Text,,Processes:
-	Gui, Add, Text,,Always On Processes:
-	Gui, Add, Text,,Monitor SABnzbd D/L's:
-	Gui, Add, Text,,SABnzbd URL:
-	Gui, Add, Text,,Monitor Emby Sessions:
-	Gui, Add, Text,,Emby URL:
-	Gui, Add, Text,,Video processes:
-	Gui, Add, Text,,Video player on:
-	Gui, Add, Button, default xm+13 yp+60 gButtonSave, Save Settings
-	Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
-	
-	;Gui, Add, Button, yp+30 gRESTARTMYSQL, Restart MySQL
-		
-	
-	; Column 2
-	;Gui, Add, Edit, vUpHours r1 w400 xm+150 ym+25, %UpHours%
-	
-	ab:= 1
-	xx:= 150
-	While ab < 13
-	{
-		if (on%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+47 von%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+47 von%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	xx:= 150
-	While ab < 25
-	{
-		if (on%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+67 von%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+67 von%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	; Sleep Hours
-	ab:= 1
-	xx:= 150
-	While ab < 13
-	{
-		if (sleep%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	xx:= 150
-	While ab < 25
-	{
-		if (sleep%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	if (WHS_Backup=1)
-		Gui, Add, Checkbox,xs+130 ys vWHS_Backup checked,
-	else 
-		Gui, Add, Checkbox,xs+130 ys vWHS_Backup,
-	Gui, Add, Edit, vDelay r1 w100 yp+25, %Delay%
-	Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
-	Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
-	
-	if (ShowTray=1)
-		Gui, Add, Checkbox, xs+130 yp+28 vShowTray checked,
-	else 
-		Gui, Add, Checkbox, xs+130 yp+28 vShowTray, 
-	
-	if (remote=1)
-		Gui, Add, Checkbox, xs+130 yp+28 vremote checked,
-	else 
-		Gui, Add, Checkbox, xs+130 yp+28 vremote, 	
-	Gui, Add, Text,xs+330 yp,Always on when sharing:
-	if (aonshare=1)
-		Gui, Add, Checkbox, xm+470 yp+2 vaonshare checked,
-	else 
-		Gui, Add, Checkbox, xm+470 yp+2 vaonshare, 	
-	Gui, Add, Edit, vExtensions r1 w425 xs+130 yp+20, %Extensions%
-		
-	Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
-	Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
+FileRead, requests, %Settings_Path%\logging\requests.txt
+Gui, +ToolWindow
 
-	 
-	if (SABnzbd=1)
-		Gui, Add, Checkbox, yp+28 vSABnzbd checked,
+Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings
+Gui, Font,,
+Gui, Font,Bold,
+Gui, Add, Text,section,Last Event: 
+Gui, Font,,
+Gui, Add, Text,xm+100 yp vLastEvent w400,%last_log%
+Gui, Font,,
+Gui, Add, Text,xs,Processes: 
+Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
+Gui, Font,,
+Gui, Add, Text,xs,PowerCfg Processes: 
+Gui, Font,,
+Gui, Add, Text,xm+180 yp vproc_reqT w50,%proc_req%
+Gui, Font,,
+Gui, Add, Text,xs,Custom/Always on Processes: 
+Gui, Font,,
+Gui, Add, Text,xm+180 yp vaonprocessT w50,%proc_block%/%proc_block_aon%
+Gui, Font,,
+Gui, Add, Text,xs,Shared Media: 
+Gui, Font,,
+Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
+Gui, Font,,
+Gui, Add, Text,xs,Emby sessions: 
+Gui, Font,,
+Gui, Add, Text,xm+180 yp vMBT w50,%MB%
+Gui, Add, Text,xs,Emby Recordings: 
+Gui, Font,,
+Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
+Gui, Font,Bold,
+Gui, Add, Text,xs yp+20,PowerCfg: 
+Gui, Font,,
+Gui, Font,, Consolas
+Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
+Gui, Font,,
+Gui, Font,Bold,
+Gui, Add, Text,xs,File Requests:
+Gui, Font,,
+Gui, Font,, Consolas
+Gui, Add, Edit, w560 r7 +Readonly -VScroll vFileListGUI section, %filelist%
+Gui, Font,,
+
+; Column 2
+Gui, Font,,
+Gui, Add, Text,section xp+280 ym+72,Schedule: 
+Gui, Font,,
+Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
+Gui, Font,,
+Gui, Add, Text,xs,WHS backup on: 
+Gui, Font,,
+Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
+Gui, Font,,
+Gui, Add, Text,xs,SABnzbd downloading: 
+Gui, Font,,
+Gui, Add, Text,xp+150 yp vSABT w50,%SAB%
+Gui, Font,,
+Gui, Add, Text,xs,Video player on: 
+Gui, Font,,
+Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
+Gui, Font,,
+
+Gui, Tab, 2
+Gui, Font,Bold,
+Gui, Add, Text,,Scheduling:
+Gui, Font,,
+Gui, Add, Text,,Always On Schedule:
+Gui, Add, Text,yp+43,Forced Sleep Schedule:
+Gui, Add, Text,,
+Gui, Font,Bold,
+Gui, Add, Text,,Keep Awake Monitoring Settings:
+Gui, Font,,
+Gui, Add, Text,section,Monitor WHS Backups:
+Gui, Add, Text,,Idle Before Standby: 
+Gui, Add, Text,,Show Tray Tip:
+Gui, Add, Text,,Monitor Shared Files:
+Gui, Add, Text,,Extensions to Monitor:
+Gui, Add, Text,,Processes:
+Gui, Add, Text,,Always On Processes:
+Gui, Add, Text,,Monitor SABnzbd D/L's:
+Gui, Add, Text,,SABnzbd URL:
+Gui, Add, Text,,Monitor Emby Sessions:
+Gui, Add, Text,,Emby URL:
+Gui, Add, Text,,Video processes:
+Gui, Add, Text,,Video player on:
+Gui, Add, Button, default xm+13 yp+60 gButtonSave, Save Settings
+Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
+
+;Gui, Add, Button, yp+30 gRESTARTMYSQL, Restart MySQL
+	
+
+; Column 2
+;Gui, Add, Edit, vUpHours r1 w400 xm+150 ym+25, %UpHours%
+
+ab:= 1
+xx:= 150
+While ab < 13
+{
+	if (on%ab%=1)
+		Gui, Add, Checkbox, x%xx% ym+47 von%ab% checked, %ab%
 	else 
-		Gui, Add, Checkbox, yp+28 vSABnzbd, 
-	Gui, Add, Text,xs+300 yp,Always on when downloading:
-	if (aonSAB=1)
-		Gui, Add, Checkbox, xm+470 yp+2 vaonSAB checked,
+		Gui, Add, Checkbox, x%xx% ym+47 von%ab%, %ab%
+	ab++
+	xx+=35
+}
+xx:= 150
+While ab < 25
+{
+	if (on%ab%=1)
+		Gui, Add, Checkbox, x%xx% ym+67 von%ab% checked, %ab%
 	else 
-		Gui, Add, Checkbox, xm+470 yp+2 vaonSAB, 
-	Gui, Add, Edit, vSABnzbd_URL r1 w180 yp+24 xs+130, %SABnzbd_URL%
-	Gui, Add, Text, xp+190 yp+3, API:
-	Gui, Add, Edit, vSABnzbd_API r1 w210 xp+25 yp-3, %SABnzbd_API%
-	
-	if (Emby=1)
-		Gui, Add, Checkbox,xs+130 yp+28 vEmby checked,
+		Gui, Add, Checkbox, x%xx% ym+67 von%ab%, %ab%
+	ab++
+	xx+=35
+}
+; Sleep Hours
+ab:= 1
+xx:= 150
+While ab < 13
+{
+	if (sleep%ab%=1)
+		Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab% checked, %ab%
 	else 
-		Gui, Add, Checkbox,xs+130 yp+28 vEmby, 
-	
-	Gui, Add, Edit, vEmby_URL r1 w180 yp+25 xs+130, %Emby_URL%
-	Gui, Add, Text, xp+190 yp+3, API:
-	Gui, Add, Edit, vEmby_API r1 w210 xp+25 yp-3, %Emby_API%
-	
-	Gui, Add, Edit, vWMCProcesses r1 w425 xs+130 yp+28, %WMCProcesses%
-	Gui, Add, Edit, vWMCIdle r1 w100 xs+130 yp+26, %WMCIdle%
-	Gui, Add, Text, yp+6 xs+255, (DDHHMM)                Monitor Video Idle:
-	if (VPIdle=1)
-		Gui, Add, Checkbox, xm+470 yp vVPIdle checked,
+		Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab%, %ab%
+	ab++
+	xx+=35
+}
+xx:= 150
+While ab < 25
+{
+	if (sleep%ab%=1)
+		Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab% checked, %ab%
 	else 
-		Gui, Add, Checkbox, xm+470 yp vVPIdle, 
+		Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab%, %ab%
+	ab++
+	xx+=35
+}
+if (WHS_Backup=1)
+	Gui, Add, Checkbox,xs+130 ys vWHS_Backup checked,
+else 
+	Gui, Add, Checkbox,xs+130 ys vWHS_Backup,
+Gui, Add, Edit, vDelay r1 w100 yp+25, %Delay%
+Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
+Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
+
+if (ShowTray=1)
+	Gui, Add, Checkbox, xs+130 yp+28 vShowTray checked,
+else 
+	Gui, Add, Checkbox, xs+130 yp+28 vShowTray, 
+
+if (remote=1)
+	Gui, Add, Checkbox, xs+130 yp+28 vremote checked,
+else 
+	Gui, Add, Checkbox, xs+130 yp+28 vremote, 	
+Gui, Add, Text,xs+330 yp,Always on when sharing:
+if (aonshare=1)
+	Gui, Add, Checkbox, xm+470 yp+2 vaonshare checked,
+else 
+	Gui, Add, Checkbox, xm+470 yp+2 vaonshare, 	
+Gui, Add, Edit, vExtensions r1 w425 xs+130 yp+20, %Extensions%
 	
-	;Close tab 
-	Gui, Tab
-	Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
-	Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
-	Gui, Add, Text, ym x475 vUpdate, Updated: %last_refresh%
-	;Gui, Add, Button, yp xm+475 w50 gKILL vKillBtn disabled, Restart
-	
+Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
+Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
+
+ 
+if (SABnzbd=1)
+	Gui, Add, Checkbox, yp+28 vSABnzbd checked,
+else 
+	Gui, Add, Checkbox, yp+28 vSABnzbd, 
+Gui, Add, Text,xs+300 yp,Always on when downloading:
+if (aonSAB=1)
+	Gui, Add, Checkbox, xm+470 yp+2 vaonSAB checked,
+else 
+	Gui, Add, Checkbox, xm+470 yp+2 vaonSAB, 
+Gui, Add, Edit, vSABnzbd_URL r1 w180 yp+24 xs+130, %SABnzbd_URL%
+Gui, Add, Text, xp+190 yp+3, API:
+Gui, Add, Edit, vSABnzbd_API r1 w210 xp+25 yp-3, %SABnzbd_API%
+
+if (Emby=1)
+	Gui, Add, Checkbox,xs+130 yp+28 vEmby checked,
+else 
+	Gui, Add, Checkbox,xs+130 yp+28 vEmby, 
+
+Gui, Add, Edit, vEmby_URL r1 w180 yp+25 xs+130, %Emby_URL%
+Gui, Add, Text, xp+190 yp+3, API:
+Gui, Add, Edit, vEmby_API r1 w210 xp+25 yp-3, %Emby_API%
+
+Gui, Add, Edit, vWMCProcesses r1 w425 xs+130 yp+28, %WMCProcesses%
+Gui, Add, Edit, vWMCIdle r1 w100 xs+130 yp+26, %WMCIdle%
+Gui, Add, Text, yp+6 xs+255, (DDHHMM)                Monitor Video Idle:
+if (VPIdle=1)
+	Gui, Add, Checkbox, xm+470 yp vVPIdle checked,
+else 
+	Gui, Add, Checkbox, xm+470 yp vVPIdle, 
+
+;Close tab 
+Gui, Tab
+Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
+Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
+Gui, Add, Text, ym x475 vUpdate, Updated: %last_refresh%
+;Gui, Add, Button, yp xm+475 w50 gKILL vKillBtn disabled, Restart
+
+If (Visible =1) {
 	if (xPos > 0 && yPos > 0)
 		Gui, Show, x%xPos% y%yPos% h620 w600, Power
 	Else
 		Gui, Show, x145 y100 h620 w600, Power
+} else {
+	Gui, Show, x%Max_Width% y%Max_Height% h620 w600, Power
 }
-
 return
 
 GuiClose:
@@ -745,6 +759,7 @@ IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
 Visible = 0
 IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
 Gui, destroy
+GoSub, SETTINGS
 return
 
 ButtonLog:
@@ -808,7 +823,7 @@ TRAYMENU:
 Suspend, Permit
 Menu,Tray,NoStandard 
 Menu,Tray,DeleteAll
-Menu,Tray,Add, Sleep, SLEEP
+Menu,Tray,Add, Sleep, SLEEPNOW
 ;Menu,Tray, Add, Settings, SETTINGS
 Menu,Tray,Add
 Menu,Tray,Add,Reset,Reload
@@ -849,7 +864,9 @@ Else If (GetKeyState("Shift", "P") && click = 2)
 }   
 Else If click = 1
 {
-   ;Msgbox 1
+   if (Visible = 1){
+	WinActivate, Power ahk_class AutoHotkeyGUI
+   }
 }
 Else If click = 2
 {
@@ -861,10 +878,13 @@ return
 TOGGLE:
 ;menu, Tray, ToggleCheck, Show GUI
 if (Visible = 1) {
-	Visible = 0
-	WinGetPos, xPos, yPos, winW, winH, Power
-	IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-	IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
+	
+		Visible = 0
+		WinGetPos, xPos, yPos, winW, winH, Power
+		IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
+		IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
+		GoSub, SETTINGS
+	
 }
 else {
 	Visible = 1
@@ -888,4 +908,10 @@ Exit:
 DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
 ExitApp
 Return
+
+; Disable ALT+F4
+#IfWinActive Power ahk_class AutoHotkeyGUI
+!F4::
+#IfWinActive
+
 ;
