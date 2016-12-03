@@ -1,16 +1,27 @@
+#NoEnv
+#MaxHotkeysPerInterval 99000000
+#HotkeyInterval 99000000
+#KeyHistory 0
 #SingleInstance force
+ListLines Off
+Process, Priority, , A
+SetBatchLines, -1
+SetKeyDelay, -1, -1
+SetMouseDelay, -1
+SetDefaultMouseSpeed, 0
+SetWinDelay, -1
 #Persistent
 if not A_IsAdmin {
    Run *RunAs "%A_ScriptFullPath%"  ; Requires v1.0.92.01+
    ExitApp
 }
 
-ES_CONTINUOUS:=0x80000000
-ES_SYSTEM_REQUIRED:=0x00000001
-ES_AWAYMODE_REQUIRED:=0x00000040
-; Tell the OS to prevent automatic sleep
-; Don't use awaymode
-DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+ES_CONTINUOUS :=0x80000000
+ES_SYSTEM_REQUIRED :=0x00000001
+ES_DISPLAY_REQUIRED := 0x00000002
+;ES_AWAYMODE_REQUIRED:=0x00000040 ; Don't use awaymode
+; Tell the OS to prevent automatic sleep until we say otherwise
+DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 
 ;DllCall( "SetThreadExecutionState", UInt,0x80000003 )
 ;  Need to run  Openfiles.exe /local on first to see files that are open
@@ -98,7 +109,9 @@ IniRead, VPIdle, %Settings_Path%\power.ini, Video, VPIdle, 1
 IniWrite, %VPIdle%, %Settings_Path%\power.ini, Video, VPIdle
 IniRead, WMCProcesses, %Settings_Path%\power.ini, Video, WMCProcesses, ehshell.exe,kodi.exe
 IniWrite, %WMCProcesses%, %Settings_Path%\power.ini, Video, WMCProcesses
-IniRead, WMCIdle, %Settings_Path%\power.ini, Video, WMCIdle, 000300
+IniRead, WMCIdle, %Settings_Path%\power.ini, Video, WMCIdle, 000200
+if (WMCIdle < 0)
+	WMCIdle=000200
 IniWrite, %WMCIdle%, %Settings_Path%\power.ini, Video, WMCIdle
 VPI = No
 
@@ -121,6 +134,7 @@ proc_block_aon=No
 last_log=
 Max_Width=%A_ScreenWidth%
 Max_Height=%A_ScreenHeight%
+requests=
 
 ; Tray Menu
 GoSub, TRAYMENU
@@ -130,17 +144,16 @@ StringMid ,DelayD, Delay,1, 2
 StringMid ,DelayH, Delay,3, 2
 StringMid ,Delaym, Delay,5, 2
 Delaysec := (DelayD*86400)+(DelayH*3600)+(Delaym*60)
+
+StringMid ,WMCIdleD, WMCIdle,1, 2
+StringMid ,WMCIdleH, WMCIdle,3, 2
+StringMid ,WMCIdlem, WMCIdle,5, 2
+WMCDelay := (WMCIdleD*86400)+(WMCIdleH*3600)+(WMCIdlem*60)
+
 StartTime = %A_Now%
 EndTime = %A_Now%
 EnvAdd EndTime, Delaysec, seconds
 EnvSub StartTime, EndTime, seconds
-
-; WMC Idle
-StringMid ,WMCIdleD, WMCIdle,1, 2
-StringMid ,WMCIdleH, WMCIdle,3, 2
-StringMid ,WMCIdleM, WMCIdle,5, 2
-WMCDelay := (WMCIdleD*86400)+(WMCIdleH*3600)+(WMCIdleM*60)
-EnvAdd EndTime, WMCDelay, seconds
 
 StartTime := Abs(StartTime)
 GoSub, StatusCheck
@@ -153,7 +166,58 @@ return
 StatusCheck:
 runwait,%comspec% /c powercfg -requests > requests.txt,%Settings_Path%\logging,hide,
 runwait,%comspec% /c %A_ScriptDir%\bin\psfile.exe > files.txt,%Settings_Path%\logging,hide,
-FileRead, requests, %Settings_Path%\logging\requests.txt
+FileRead, requests_raw, %Settings_Path%\logging\requests.txt
+
+; Any process requesting the system is allowed.  Exclude for this application
+running := 0
+plist=
+requests_temp=
+proc_req = No
+Loop, read, %Settings_Path%\logging\requests.txt
+{
+	IfInString, A_LoopReadLine, [PROCESS]
+	{
+		If requests_temp not contains %A_LoopReadLine% 
+		{
+			if (!A_iscompiled)
+			{
+				IfNotInstring, A_LoopReadLine, autohotkey.exe
+				{
+					running++
+					requests_temp=%A_LoopReadLine%`r`n%requests_temp%
+					proc_req = Yes
+					StringSplit, Array, A_LoopReadLine,\,
+					LastItem:=Array%Array0%
+					plist = %plist% %LastItem%
+				}
+			} else {
+				IfNotInstring, A_LoopReadLine, Power.exe
+				{
+					running++
+					requests_temp=%A_LoopReadLine%`r`n%requests_temp%
+					proc_req = Yes
+					StringSplit, Array, A_LoopReadLine,\,
+					LastItem:=Array%Array0%
+					plist = %plist% %LastItem%
+				}
+			}
+		}
+	}
+}
+requests=%requests_temp%
+
+if (WHS_Backup = 1) 
+{
+	IfInstring, requests_raw, WSS_ComputerBackupProviderSvc
+	{
+		running++
+		WHS = Yes
+	} else {
+		WHS = No
+	}
+} else {
+	WHS = No
+}
 
 if (SABnzbd = 1) {
 	UrlDownloadToFile, %SABnzbd_URL%/api?mode=qstatus&output=xml&apikey=%SABnzbd_API%, %Settings_Path%\logging\sab.xml
@@ -161,7 +225,7 @@ if (SABnzbd = 1) {
 }
 
 if (Emby = 1) {
-	UrlDownloadToFile, %Emby_URL%/emby/emby/Sessions?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby.txt
+	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby.txt
 	FileRead, Emby_state, %Settings_Path%\logging\emby.txt
 	UrlDownloadToFile, %Emby_URL%/LiveTv/Recordings?api_key=%Emby_API%&format=json&IsInProgress=1, %Settings_Path%\logging\emby_rec.txt
 	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.txt
@@ -175,52 +239,48 @@ Loop, read, %Settings_Path%\logging\power.log
 }
 last_log =  %LastLine%
 
-running := 0
-plist=
 proc_block=No
 Loop, parse, Processes, `,
 {
 	Process, Exist,  %A_LoopField%
 	if (Errorlevel > 0) {
-		running++
-		plist = %plist% %A_LoopField%
+		If plist not contains %A_LoopField% 
+		{
+			running++
+			plist = %plist% %A_LoopField%
+		}
 		proc_block=Yes
 	}
 }
+
 proc_block_aon=No
 Loop, parse, AONProcesses, `,
 {
 	Process, Exist,  %A_LoopField%
 	if (Errorlevel > 0) {
 		proc_block_aon=Yes
-		plist = %plist% %A_LoopField%
-		running++
-	}
-}
-if (VPIdle =1) {
-	Loop, parse, WMCProcesses, `,
-	{
-		Process, Exist,  %A_LoopField%
-		if (Errorlevel > 0) {
-			VPI=Yes
-		} else {
-			VPI=No
+		If plist not contains %A_LoopField% 
+		{
+			running++
+			plist = %plist% %A_LoopField%
 		}
-		
 	}
 }
 
-if (WHS_Backup = 1) 
+vpproc:=0
+VPI=No
+Loop, parse, WMCProcesses, `,
 {
-	IfInstring, requests, WSS_ComputerBackupProviderSvc
-	{
-		running++
-		WHS = Yes
-	} else {
-		WHS = No
+	Process, Exist, %A_LoopField%
+	if (Errorlevel > 0) {
+		VPI=Yes
+		vpproc++
+		If plist not contains %A_LoopField% 
+		{
+			running++
+			plist = %plist% %A_LoopField%
+		}
 	}
-} else {
-	WHS = No
 }
 
 IfInstring, SAB_state, <state>Downloading</state>
@@ -237,10 +297,13 @@ temp_MB=
 if (Emby = 1) {
 	Loop, parse, Emby_state, `,
 	{
+		IfInstring, A_LoopField, NowPlayingItem
+		{
+			running++
+		}
 		IfInstring, A_LoopField, UserName
 		{
 			StringSplit, word_array, A_LoopField, :
-			running++
 			StringReplace, temp_temp_MB, word_array2,",, All 
 			;"
 			if (temp_MB != "")
@@ -286,46 +349,6 @@ Loop,Read,%Settings_Path%\logging\files.txt
 	}
 }
 
-; Any process requesting the system is allowed.  Exclude for this application
-proc_req = No
-Loop,Read,%Settings_Path%\logging\requests.txt 
-{
-	if A_LoopReadLine contains %Extensions%
-	{
-		if A_LoopReadLine contains A file has been opened across the network
-		{
-			StringReplace, temp, A_LoopReadLine, A file has been opened across the network. File name: ,,All
-			StringReplace, temp, temp, [\,\\,All
-			StringReplace, temp, temp,] Process ID: ,,All
-			temp := RegExReplace(temp, "\[(.*)", "")
-			tfilelist = %temp%`r`n%tfilelist%
-		}
-	}
-	if A_LoopReadLine contains [PROCESS]
-	{
-		if (!A_iscompiled)
-		{
-			IfNotInstring, A_LoopReadLine, autohotkey.exe
-			{
-				running++
-				proc_req = Yes
-				StringSplit, Array, A_LoopReadLine,\,
-				LastItem:=Array%Array0%
-				plist = %plist% %LastItem%
-			}
-		} else {
-			IfNotInstring, A_LoopReadLine, Power.exe
-			{
-				running++
-				proc_req = Yes
-				StringSplit, Array, A_LoopReadLine,\,
-				LastItem:=Array%Array0%
-				plist = %plist% %LastItem%
-			}
-		}
-	}
-}
-
 Sort, tfilelist, U
 filelist=%tfilelist%
 temp_file:=0
@@ -348,32 +371,33 @@ if (on%cur_hour% = 1) {
 	schedule=Yes
 	running++
 }
-
-if (VPIdle = 1) {
-	vpproc:=0
-	Loop, parse, WMCProcesses, `,
-	{
-		Process, Exist,  %A_LoopField%
-		if (Errorlevel > 0 ) 
-			vpproc++
-	}
-	if ((vpproc = 0 )&& (TimeIdle > WMCDelay)) 
-	{
-		;MsgBox,0,Warning,Windows will now go to sleep,3
-		GoSub, SLEEP	
-	} else if (vpproc >0)
-		running++
-}
+TimeIdle := floor(A_TimeIdle*1/1000)
+FormatTime, last_refresh,,MM/dd HH:mm
+;MsgBox, WMCDelay: %WMCDelay% WMCIdle %WMCIDleD%:%WMCIDleH%:%WMCIDlem% / %WMCIDle%
+;If always on processes are going, reset
 if (proc_block_aon = "Yes") {
 	GoSub, Reset
-	if (schedule = "Yes")
-		Menu, Tray, Icon, running.ico
-	else
-		Menu, Tray, Icon, normal.ico
+	Menu, Tray, Icon, running.ico
 
-} else if (sleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) 
-{
+; If Video player idle is enabled and a video player is running	
+} else If ((vpproc > 0 ) && (VPIdle = 1) && (vpproc = running)){
+	if (TimeIdle > (WMCDelay-Delaysec))
+	{
+		on:=1
+		SetTimer, UpdateOSD, 1000
+		SetTimer, TimerLoop, 1000
+		Menu, Tray, Icon, sleep.ico
+		DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
+	} else {
+		GoSub, Reset
+		if (schedule = "Yes")
+			Menu, Tray, Icon, running.ico
+		else
+			Menu, Tray, Icon, normal.ico
+	}
+} else if (sleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) {
 	;MsgBox, %proc_block_aon%
+	; If always on processes are going, don't sleep
 	if (aonshare = 1 && temp_file > 0) {
 		GoSub, Reset
 		if (schedule = "Yes")
@@ -386,6 +410,7 @@ if (proc_block_aon = "Yes") {
 			Menu, Tray, Icon, running.ico
 		else 
 			Menu, Tray, Icon, normal.ico
+	; Otherwise go to sleep
 	} else {
 		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm 
 		;FileAppend, %timestart% - Force Sleep Schedule `r`n, %Settings_Path%\logging\power.log
@@ -393,22 +418,25 @@ if (proc_block_aon = "Yes") {
 		SetTimer, UpdateOSD, 1000
 		SetTimer, TimerLoop, 1000
 		Menu, Tray, Icon, sleep.ico
+		; Turn off system requested
+		DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
 	}
+; Normal hours, processes are running
 } else if ((running > 0) || (A_TimeIdle < 10000)) {
 	GoSub, Reset
 	if (schedule = "Yes")
 		Menu, Tray, Icon, running.ico
 	else
 		Menu, Tray, Icon, normal.ico
-	
+
+; Otherwise time to sleep		
 } else {
 	on:=1
 	SetTimer, UpdateOSD, 1000
 	SetTimer, TimerLoop, 1000
 	Menu, Tray, Icon, sleep.ico
+	DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
 }
-TimeIdle := floor(A_TimeIdle*1/1000)
-FormatTime, last_refresh,,MM/dd HH:mm
 if (Visible = 1)
 {
 	GuiControl,, Update, Updated: %last_refresh%
@@ -456,6 +484,8 @@ RunWait, sleep.exe
 Sleep, %RefreshInt%
 FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
+MouseMove, 1 , 1,, R
+MouseMove, -1,-1,, R
 GoSub, Reset
 Return
 
@@ -466,6 +496,8 @@ DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
 Sleep, %RefreshInt%
 FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
+MouseMove, 1 , 1,, R
+MouseMove, -1,-1,, R
 GoSub, Reset
 Return
 
@@ -486,13 +518,15 @@ If (on = 1 or var < 30) {
 			;FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 			;FileAppend, %timestart% - Idle detected`r`n, %Settings_Path%\logging\power.log
 		}
+		;
 	} else {
 		round++
 	}
 } else {
 	round:= 0
+	;DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 }
-Return
+return
 
 FormatSeconds(NumberOfSeconds)  ; Convert the specified number of seconds to hh:mm:ss format.
 {
@@ -512,19 +546,24 @@ StringMid ,DelayD, Delay,1, 2
 StringMid ,DelayH, Delay,3, 2
 StringMid ,Delaym, Delay,5, 2
 Delaysec := (DelayD*86400)+(DelayH*3600)+(Delaym*60)
+
+StringMid ,WMCIdleD, WMCIdle,1, 2
+StringMid ,WMCIdleH, WMCIdle,3, 2
+StringMid ,WMCIdlem, WMCIdle,5, 2
+WMCDelay := (WMCIdleD*86400)+(WMCIdleH*3600)+(WMCIdlem*60)
+
 StartTime = %A_Now%
 EndTime = %A_Now%
 EnvAdd EndTime, Delaysec, seconds
 EnvSub StartTime, EndTime, seconds
+
 StartTime := Abs(StartTime)
+StartVideoTime := Abs(StartVideoTime)
 perc := 0 ;Resets percentage to 0, otherwise this loop never sees the counter reset
 on:=0
 round:=0
 var:=
-If (VPI = "No") {
-	MouseMove, 1 , 1,, R
-	MouseMove, -1,-1,, R
-}
+DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 return
 
 ~LButton::
@@ -539,7 +578,7 @@ Return
 
 SETTINGS:
 Gui, destroy
-FileRead, requests, %Settings_Path%\logging\requests.txt
+;FileRead, requests, %Settings_Path%\logging\requests.txt
 Gui, +ToolWindow
 
 Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings
@@ -571,7 +610,7 @@ Gui, Add, Text,xs,Emby Recordings:
 Gui, Font,,
 Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
 Gui, Font,Bold,
-Gui, Add, Text,xs yp+20,PowerCfg: 
+Gui, Add, Text,xs yp+20,PowerCfg Processes: 
 Gui, Font,,
 Gui, Font,, Consolas
 Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
@@ -613,18 +652,18 @@ Gui, Font,Bold,
 Gui, Add, Text,,Keep Awake Monitoring Settings:
 Gui, Font,,
 Gui, Add, Text,section,Monitor WHS Backups:
-Gui, Add, Text,,Idle Before Standby: 
+Gui, Add, Text,,Idle before standby: 
 Gui, Add, Text,,Show Tray Tip:
-Gui, Add, Text,,Monitor Shared Files:
-Gui, Add, Text,,Extensions to Monitor:
+Gui, Add, Text,,Monitor shared files:
+Gui, Add, Text,,Extensions to monitor:
 Gui, Add, Text,,Processes:
-Gui, Add, Text,,Always On Processes:
+Gui, Add, Text,,Always on processes:
 Gui, Add, Text,,Monitor SABnzbd D/L's:
 Gui, Add, Text,,SABnzbd URL:
-Gui, Add, Text,,Monitor Emby Sessions:
+Gui, Add, Text,,Monitor Emby playstate:
 Gui, Add, Text,,Emby URL:
 Gui, Add, Text,,Video processes:
-Gui, Add, Text,,Video player on:
+Gui, Add, Text,,Video idle before standby:
 Gui, Add, Button, default xm+13 yp+60 gButtonSave, Save Settings
 Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
 
@@ -815,7 +854,7 @@ Loop, parse, Processes, `,
 Processes := SubStr(temp_proc_parse, 2)
 IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
 
-GoSub, SETTINGS
+GoSub, Reload
 return
 
 
