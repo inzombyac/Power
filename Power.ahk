@@ -22,19 +22,13 @@ ES_DISPLAY_REQUIRED := 0x00000002
 ;ES_AWAYMODE_REQUIRED:=0x00000040 ; Don't use awaymode
 ; Tell the OS to prevent automatic sleep until we say otherwise
 DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
-
-;DllCall( "SetThreadExecutionState", UInt,0x80000003 )
-;  Need to run  Openfiles.exe /local on first to see files that are open
-SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
-Settings_Path=%A_ScriptDir%
+SetWorkingDir %A_ScriptDir% 
+Settings_Path = %A_ScriptDir% 
 FileCreateDir, %Settings_Path%\logging
-perc 	:= 0
-;			DDHHMM
-;Delay 	= 	000010
+perc := 0
 on:=0
 round:=0
 OnMessage(0x404, "AHK_NOTIFYICON") ; WM_USER + 4
-
 
 ; Sleep Settings
 IniRead, Delay, %Settings_Path%\power.ini, Sleep, Delay, 000010
@@ -70,8 +64,14 @@ IniWrite, %Extensions%, %Settings_Path%\power.ini, Sleep, Extensions
 IniRead, WHS_Backup, %Settings_Path%\power.ini, Sleep, WHS_Backup, 1
 IniWrite, %WHS_Backup%, %Settings_Path%\power.ini, Sleep, WHS_Backup
 
-;IniRead, UpHours, %Settings_Path%\power.ini, Sleep, UpHours, 7,8,12,17,18,19,20,21,22
-;IniWrite, %UpHours%, %Settings_Path%\power.ini, Sleep, UpHours
+IniRead, PCFG_Process, %Settings_Path%\power.ini, Sleep, PCFG_Process, 1
+IniWrite, %PCFG_Process%, %Settings_Path%\power.ini, Sleep, PCFG_Process
+
+IniRead, PCFG_Service, %Settings_Path%\power.ini, Sleep, PCFG_Service, 0
+IniWrite, %PCFG_Service%, %Settings_Path%\power.ini, Sleep, PCFG_Service
+
+IniRead, PCFG_Driver, %Settings_Path%\power.ini, Sleep, PCFG_Driver, 0
+IniWrite, %PCFG_Driver%, %Settings_Path%\power.ini, Sleep, PCFG_Driver
 
 ; Schedule
 aa:= 1
@@ -177,29 +177,59 @@ Loop, read, %Settings_Path%\logging\requests.txt
 {
 	IfInString, A_LoopReadLine, [PROCESS]
 	{
-		If requests_temp not contains %A_LoopReadLine% 
-		{
+		If (PCFG_Process = 1)
+		{			
 			if (!A_iscompiled)
 			{
 				IfNotInstring, A_LoopReadLine, autohotkey.exe
 				{
-					running++
-					requests_temp=%A_LoopReadLine%`r`n%requests_temp%
-					proc_req = Yes
 					StringSplit, Array, A_LoopReadLine,\,
 					LastItem:=Array%Array0%
-					plist = %plist% %LastItem%
+					IfNotInstring, requests_temp, %LastItem% 
+					{
+						running++
+						requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
+						proc_req = Yes
+						plist = %plist% %LastItem%
+					}
 				}
 			} else {
 				IfNotInstring, A_LoopReadLine, Power.exe
 				{
-					running++
-					requests_temp=%A_LoopReadLine%`r`n%requests_temp%
-					proc_req = Yes
 					StringSplit, Array, A_LoopReadLine,\,
 					LastItem:=Array%Array0%
-					plist = %plist% %LastItem%
+					IfNotInstring, requests_temp, %LastItem% 
+					{
+						running++
+						requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
+						proc_req = Yes
+						plist = %plist% %LastItem%
+					}
 				}
+			}
+		}
+	}
+	IfInString, A_LoopReadLine, [SERVICE]
+	{
+		If (PCFG_Service = 1)
+		{
+			If requests_temp not contains %A_LoopReadLine% 
+			{
+				running++
+				requests_temp=%A_LoopReadLine%`r`n%requests_temp%
+				proc_req = Yes
+			}
+		}
+	}
+	IfInString, A_LoopReadLine, [DRIVER]
+	{
+		If (PCFG_Driver = 1)
+		{
+			If requests_temp not contains %A_LoopReadLine% 
+			{
+				running++
+				requests_temp=%A_LoopReadLine%`r`n%requests_temp%
+				proc_req = Yes
 			}
 		}
 	}
@@ -239,20 +269,6 @@ Loop, read, %Settings_Path%\logging\power.log
 }
 last_log =  %LastLine%
 
-proc_block=No
-Loop, parse, Processes, `,
-{
-	Process, Exist,  %A_LoopField%
-	if (Errorlevel > 0) {
-		If plist not contains %A_LoopField% 
-		{
-			running++
-			plist = %plist% %A_LoopField%
-		}
-		proc_block=Yes
-	}
-}
-
 proc_block_aon=No
 Loop, parse, AONProcesses, `,
 {
@@ -263,22 +279,43 @@ Loop, parse, AONProcesses, `,
 		{
 			running++
 			plist = %plist% %A_LoopField%
+			requests =%requests%`r`n[ALWAYS ON] %A_LoopField%
 		}
 	}
 }
 
-vpproc:=0
-VPI=No
-Loop, parse, WMCProcesses, `,
+proc_block=No
+Loop, parse, Processes, `,
 {
-	Process, Exist, %A_LoopField%
+	Process, Exist,  %A_LoopField%
 	if (Errorlevel > 0) {
-		VPI=Yes
-		vpproc++
 		If plist not contains %A_LoopField% 
 		{
 			running++
 			plist = %plist% %A_LoopField%
+			requests =%requests%`r`n[PROCESS] %A_LoopField%
+		}
+		proc_block=Yes
+	}
+}
+
+
+vpproc:=0
+VPI=No
+if (VPIdle = 1)
+{
+	Loop, parse, WMCProcesses, `,
+	{
+		Process, Exist, %A_LoopField%
+		if (Errorlevel > 0) {
+			VPI=Yes
+			vpproc++
+			If plist not contains %A_LoopField% 
+			{
+				running++
+				plist = %plist% %A_LoopField%
+				requests =%requests%`r`n[MEDIA] %A_LoopField%
+			}
 		}
 	}
 }
@@ -344,8 +381,9 @@ Loop,Read,%Settings_Path%\logging\files.txt
 {
 	if A_LoopReadLine contains %Extensions%
 	{
-		if A_LoopReadLine not contains Scripts 
-			tfilelist = %A_LoopReadLine%`r`n%tfilelist%
+		ts := SubStr(A_LoopReadLine, 12)
+		If tfilelist not contains %ts% 
+			tfilelist = %ts%`r`n%tfilelist%
 	}
 }
 
@@ -379,7 +417,7 @@ if (proc_block_aon = "Yes") {
 	GoSub, Reset
 	Menu, Tray, Icon, running.ico
 
-; If Video player idle is enabled and a video player is running	
+; If Media player idle is enabled and a media player is running	
 } else If ((vpproc > 0 ) && (VPIdle = 1) && (vpproc = running)){
 	if (TimeIdle > (WMCDelay-Delaysec))
 	{
@@ -480,6 +518,13 @@ Return
 SLEEP:
 FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
+if (VPIdle = 1)
+{
+	Loop, parse, WMCProcesses, `,
+	{
+		Process, Close, %A_LoopField%
+	}
+}
 RunWait, sleep.exe
 Sleep, %RefreshInt%
 FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
@@ -588,9 +633,9 @@ Gui, Add, Text,section,Last Event:
 Gui, Font,,
 Gui, Add, Text,xm+100 yp vLastEvent w400,%last_log%
 Gui, Font,,
-Gui, Add, Text,xs,Processes: 
-Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
-Gui, Font,,
+;Gui, Add, Text,xs,Processes: 
+;Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
+;Gui, Font,,
 Gui, Add, Text,xs,PowerCfg Processes: 
 Gui, Font,,
 Gui, Add, Text,xm+180 yp vproc_reqT w50,%proc_req%
@@ -610,7 +655,7 @@ Gui, Add, Text,xs,Emby Recordings:
 Gui, Font,,
 Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
 Gui, Font,Bold,
-Gui, Add, Text,xs yp+20,PowerCfg Processes: 
+Gui, Add, Text,xs yp+20,Process blocking: 
 Gui, Font,,
 Gui, Font,, Consolas
 Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
@@ -636,7 +681,7 @@ Gui, Add, Text,xs,SABnzbd downloading:
 Gui, Font,,
 Gui, Add, Text,xp+150 yp vSABT w50,%SAB%
 Gui, Font,,
-Gui, Add, Text,xs,Video player on: 
+Gui, Add, Text,xs,Media player processes: 
 Gui, Font,,
 Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
 Gui, Font,,
@@ -651,9 +696,8 @@ Gui, Add, Text,,
 Gui, Font,Bold,
 Gui, Add, Text,,Keep Awake Monitoring Settings:
 Gui, Font,,
-Gui, Add, Text,section,Monitor WHS Backups:
+Gui, Add, Text,section,powercfg /requests:
 Gui, Add, Text,,Idle before standby: 
-Gui, Add, Text,,Show Tray Tip:
 Gui, Add, Text,,Monitor shared files:
 Gui, Add, Text,,Extensions to monitor:
 Gui, Add, Text,,Processes:
@@ -662,8 +706,11 @@ Gui, Add, Text,,Monitor SABnzbd D/L's:
 Gui, Add, Text,,SABnzbd URL:
 Gui, Add, Text,,Monitor Emby playstate:
 Gui, Add, Text,,Emby URL:
-Gui, Add, Text,,Video processes:
-Gui, Add, Text,,Video idle before standby:
+Gui, Add, Text,,Media Players:
+Gui, Add, Text,,Media idle before standby:
+Gui, Font,Bold,
+Gui, Add, Text,,Other:
+Gui, Font,,
 Gui, Add, Button, default xm+13 yp+60 gButtonSave, Save Settings
 Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
 
@@ -716,18 +763,28 @@ While ab < 25
 	ab++
 	xx+=35
 }
-if (WHS_Backup=1)
-	Gui, Add, Checkbox,xs+130 ys vWHS_Backup checked,
+; Power Config Settings
+if (PCFG_Process=1)
+	Gui, Add, Checkbox, xs+130 ys vPCFG_Process checked, Processes
 else 
-	Gui, Add, Checkbox,xs+130 ys vWHS_Backup,
-Gui, Add, Edit, vDelay r1 w100 yp+25, %Delay%
+	Gui, Add, Checkbox, xs+130 ys vPCFG_Process, Processes
+if (PCFG_Service=1)
+	Gui, Add, Checkbox, xp+100 yp vPCFG_Service checked, Services
+else 
+	Gui, Add, Checkbox, xp+100 yp vPCFG_Service, Services
+if (PCFG_Driver=1)
+	Gui, Add, Checkbox, xp+100 yp vPCFG_Driver checked, Drivers
+else 
+	Gui, Add, Checkbox, xp+100 yp vPCFG_Driver, Drivers
+if (WHS_Backup=1)
+	Gui, Add, Checkbox, xp+100 yp vWHS_Backup checked, Backup Service (WHS)
+else 
+	Gui, Add, Checkbox, xp+100 yp vWHS_Backup, Backup Service (WHS)
+
+; Idle
+Gui, Add, Edit, vDelay r1 w100 xs+130 yp+25, %Delay%
 Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
 Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
-
-if (ShowTray=1)
-	Gui, Add, Checkbox, xs+130 yp+28 vShowTray checked,
-else 
-	Gui, Add, Checkbox, xs+130 yp+28 vShowTray, 
 
 if (remote=1)
 	Gui, Add, Checkbox, xs+130 yp+28 vremote checked,
@@ -774,6 +831,11 @@ if (VPIdle=1)
 else 
 	Gui, Add, Checkbox, xm+470 yp vVPIdle, 
 
+if (ShowTray=1)
+	Gui, Add, Checkbox, xs+130 yp+24 vShowTray checked, Enable Tray tip
+else 
+	Gui, Add, Checkbox, xs+130 yp+24 vShowTray, Enable Tray tip
+
 ;Close tab 
 Gui, Tab
 Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
@@ -789,6 +851,10 @@ If (Visible =1) {
 } else {
 	Gui, Show, x%Max_Width% y%Max_Height% h620 w600, Power
 }
+if (visible = 1)
+	Winset, Alwaysontop, ON , Power ahk_class AutoHotkeyGUI
+else
+	Winset, Alwaysontop, OFF , Power ahk_class AutoHotkeyGUI
 return
 
 GuiClose:
@@ -833,7 +899,10 @@ IniWrite, %ShowTray%, %Settings_Path%\power.ini, GUI, ShowTray
 IniWrite, %VPIdle%, %Settings_Path%\power.ini, Video, VPIdle
 IniWrite, %WMCProcesses%, %Settings_Path%\power.ini, Video, WMCProcesses
 IniWrite, %WMCIdle%, %Settings_Path%\power.ini, Video, WMCIdle
-
+IniWrite, %WHS_Backup%, %Settings_Path%\power.ini, Sleep, WHS_Backup
+IniWrite, %PCFG_Process%, %Settings_Path%\power.ini, Sleep, PCFG_Process
+IniWrite, %PCFG_Service%, %Settings_Path%\power.ini, Sleep, PCFG_Service
+IniWrite, %PCFG_Driver%, %Settings_Path%\power.ini, Sleep, PCFG_Driver
 
 ac:= 1
 While ac < 25
@@ -917,13 +986,10 @@ return
 TOGGLE:
 ;menu, Tray, ToggleCheck, Show GUI
 if (Visible = 1) {
-	
-		Visible = 0
-		WinGetPos, xPos, yPos, winW, winH, Power
-		IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-		IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
-		GoSub, SETTINGS
-	
+	Visible = 0
+	WinGetPos, xPos, yPos, winW, winH, Power
+	IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
+	IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
 }
 else {
 	Visible = 1
