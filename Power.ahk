@@ -135,6 +135,8 @@ last_log=
 Max_Width=%A_ScreenWidth%
 Max_Height=%A_ScreenHeight%
 requests=
+Emby_Sessions=
+Emby_Recordings=
 
 ; Tray Menu
 GoSub, TRAYMENU
@@ -234,7 +236,7 @@ Loop, read, %Settings_Path%\logging\requests.txt
 		}
 	}
 }
-requests=%requests_temp%
+requests:=Trim(requests_temp)
 
 if (WHS_Backup = 1) 
 {
@@ -255,10 +257,16 @@ if (SABnzbd = 1) {
 }
 
 if (Emby = 1) {
-	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby.txt
-	FileRead, Emby_state, %Settings_Path%\logging\emby.txt
+	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=xml, %Settings_Path%\logging\emby.xml
+	FileRead, Emby_state, %Settings_Path%\logging\emby.xml
+	
 	UrlDownloadToFile, %Emby_URL%/LiveTv/Recordings?api_key=%Emby_API%&format=json&IsInProgress=1, %Settings_Path%\logging\emby_rec.txt
 	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.txt
+	
+	d3p1	:=	"d3p1:"
+	ns = xmlns=".*?"
+	Emby_state := RegExReplace(Emby_state, ns, "")
+	Emby_state := RegExReplace(Emby_state, d3p1, "")
 }
 
 
@@ -328,30 +336,60 @@ IfInstring, SAB_state, <state>Downloading</state>
 else
 	SAB = No
 
-MB=No
+MB=
 temp_MB=
+Emby_Sessions= 
 
 if (Emby = 1) {
-	Loop, parse, Emby_state, `,
-	{
-		IfInstring, A_LoopField, NowPlayingItem
-		{
-			running++
-		}
-		IfInstring, A_LoopField, UserName
-		{
-			StringSplit, word_array, A_LoopField, :
-			StringReplace, temp_temp_MB, word_array2,",, All 
-			;"
-			if (temp_MB != "")
-				temp_MB=%temp_temp_MB%/%temp_MB%
-			else
-				temp_MB=%temp_temp_MB%
-		}
-	}
-	if (temp_MB != "")
-		MB=%temp_MB%
+	
+	x1 := ComObjCreate("MSXML2.DOMDocument.6.0")
+	x1.async := false
+	x1.loadXML(Emby_state)
+	x1titlenodes := x1.selectNodes("/ArrayOfSessionInfoDto/SessionInfoDto") 
 
+	for x1titlenode in x1titlenodes
+	{
+		x1_deviceName			:= x1titlenode.selectSingleNode("DeviceName")
+		x1_deviceId				:= x1titlenode.selectSingleNode("DeviceId")
+		x1_client				:= x1titlenode.selectSingleNode("Client")
+		x1_nowPlaying			:= x1titlenode.selectSingleNode("NowPlayingItem/Name")
+		x1_user					:= x1titlenode.selectSingleNode("UserName")
+		x1_length				:= x1titlenode.selectSingleNode("NowPlayingItem/RunTimeTicks")
+		x1_position				:= x1titlenode.selectSingleNode("PlayState/PositionTicks")
+		x1_transcodePosition	:= x1titlenode.selectSingleNode("TranscodingInfo/CompletionPercentage")
+	  
+		DeviceName 	:=	x1_deviceName.text
+		NowPlaying 	:= 	x1_nowPlaying.text
+		Client		:=	x1_client.text
+		DeviceID	:=	x1_deviceId.text
+		UserName	:=	x1_user.text
+		Length		:=	x1_length.text			; Blank for Live TV
+		Position	:=	x1_position.text
+		;Position2	:=	x1_transcodePosition.text
+		State		:= 0
+		
+		if (NowPlaying != "")
+			running++
+		if (UserName != "") 
+		{
+			if temp_MB not contains %UserName%
+				temp_MB=%temp_MB% %UserName%
+		}	
+		;if (Position2 > 0)
+		;	State := floor(Position2)
+		if (Length > 0 && Position > 0)
+			State := floor((Position/Length)*100)
+		
+		if (State > 0)
+			Emby_Sessions = %Emby_Sessions%%UserName% (%DeviceName%):`t%NowPlaying% (%State%`%)`r`n
+		else if (NowPlaying != "")
+			Emby_Sessions = %Emby_Sessions%%UserName% (%DeviceName%):`t%NowPlaying%`r`n
+		else
+			Emby_Sessions = %Emby_Sessions%%UserName% (%DeviceName%):`r`n
+		
+	}
+	MB=%temp_MB%
+	
 	recordingcount:=0	
 	Loop, parse, Emby_rec_state, `,
 	{
@@ -381,7 +419,7 @@ Loop,Read,%Settings_Path%\logging\files.txt
 {
 	if A_LoopReadLine contains %Extensions%
 	{
-		ts := SubStr(A_LoopReadLine, 12)
+		ts := SubStr(A_LoopReadLine, 13)
 		If tfilelist not contains %ts% 
 			tfilelist = %ts%`r`n%tfilelist%
 	}
@@ -490,6 +528,8 @@ if (Visible = 1)
 	GuiControl,, scheduleT,%schedule%
 	GuiControl,, MyEdit,%requests%
 	GuiControl,, FileListGUI,%filelist%
+	GuiControl,, EmbyList,%Emby_Sessions%
+	GuiControl,, EmbyRecList,%Emby_Recordings%
 	GuiControl,, IdleStatus,Idle %TimeIdle% seconds
 	GuiControl,, RunStatus,%running% blockers
 	GuiControl,, LastEvent,%last_log%
@@ -626,7 +666,7 @@ Gui, destroy
 ;FileRead, requests, %Settings_Path%\logging\requests.txt
 Gui, +ToolWindow
 
-Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings
+Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings|Emby
 Gui, Font,,
 Gui, Font,Bold,
 Gui, Add, Text,section,Last Event: 
@@ -648,7 +688,7 @@ Gui, Add, Text,xs,Shared Media:
 Gui, Font,,
 Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
 Gui, Font,,
-Gui, Add, Text,xs,Emby sessions: 
+Gui, Add, Text,xs,Emby Users: 
 Gui, Font,,
 Gui, Add, Text,xm+180 yp vMBT w50,%MB%
 Gui, Add, Text,xs,Emby Recordings: 
@@ -664,7 +704,7 @@ Gui, Font,Bold,
 Gui, Add, Text,xs,File Requests:
 Gui, Font,,
 Gui, Font,, Consolas
-Gui, Add, Edit, w560 r7 +Readonly -VScroll vFileListGUI section, %filelist%
+Gui, Add, Edit, w560 r14 +Readonly -VScroll vFileListGUI section, %filelist%
 Gui, Font,,
 
 ; Column 2
@@ -836,8 +876,22 @@ if (ShowTray=1)
 else 
 	Gui, Add, Checkbox, xs+130 yp+24 vShowTray, Enable Tray tip
 
+Gui, Tab, 3
+Gui, Font,Bold,
+Gui, Add, Text,section,Emby Sessions:
+Gui, Font,,
+Gui, Font,, Consolas
+Gui, Add, Edit, xs w560 r20 +Readonly -VScroll vEmbyList section, %Emby_Sessions%
+Gui, Font,,
+Gui, Font,Bold,
+Gui, Add, Text,section,Emby Recordings:
+Gui, Font,,
+Gui, Font,, Consolas
+Gui, Add, Edit, xs w560 r19 +Readonly -VScroll vEmbyRecList section, %Emby_Recordings%
+Gui, Font,,
 ;Close tab 
 Gui, Tab
+
 Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
 Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
 Gui, Add, Text, ym x475 vUpdate, Updated: %last_refresh%
