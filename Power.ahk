@@ -338,7 +338,8 @@ else
 
 MB=
 temp_MB=
-Emby_Sessions= 
+Emby_Sessions=
+Emby_Recordings= 
 
 if (Emby = 1) {
 	
