@@ -55,6 +55,9 @@ IniWrite, %Emby_API%, %Settings_Path%\power.ini, Sleep, Emby_API
 IniRead, Processes, %Settings_Path%\power.ini, Sleep, Processes, php.exe,postprocess.exe,comskip.exe,teracopy.exe
 IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
 
+IniRead, IgnoreProcesses, %Settings_Path%\power.ini, Sleep, IgnoreProcesses, MediaBrowser.ServerApplication.exe
+IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
+
 IniRead, AONProcesses, %Settings_Path%\power.ini, Sleep, AONProcesses, teracopy.exe
 IniWrite, %AONProcesses%, %Settings_Path%\power.ini, Sleep, AONProcesses
 
@@ -94,7 +97,7 @@ IniWrite, %aonSAB%, %Settings_Path%\power.ini, Always ON, aonSAB
 ;Gui settings
 IniRead, Visible, %Settings_Path%\power.ini, GUI, Visible, 1
 IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
-IniRead, RefreshInt, %Settings_Path%\power.ini, GUI, RefreshInt, 15000
+IniRead, RefreshInt, %Settings_Path%\power.ini, GUI, RefreshInt, 60000
 IniWrite, %RefreshInt%, %Settings_Path%\power.ini, GUI, RefreshInt
 IniRead, ShowTray, %Settings_Path%\power.ini, GUI, ShowTray, 1
 IniWrite, %ShowTray%, %Settings_Path%\power.ini, GUI, ShowTray
@@ -189,10 +192,13 @@ Loop, read, %Settings_Path%\logging\requests.txt
 					LastItem:=Array%Array0%
 					IfNotInstring, requests_temp, %LastItem% 
 					{
-						running++
-						requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
-						proc_req = Yes
-						plist = %plist% %LastItem%
+						If IgnoreProcesses not contains %LastItem% 
+						{
+							running++
+							requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
+							proc_req = Yes
+							plist = %plist% %LastItem%
+						}
 					}
 				}
 			} else {
@@ -202,10 +208,13 @@ Loop, read, %Settings_Path%\logging\requests.txt
 					LastItem:=Array%Array0%
 					IfNotInstring, requests_temp, %LastItem% 
 					{
-						running++
-						requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
-						proc_req = Yes
-						plist = %plist% %LastItem%
+						If IgnoreProcesses not contains %LastItem% 
+						{
+							running++
+							requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
+							proc_req = Yes
+							plist = %plist% %LastItem%
+						}
 					}
 				}
 			}
@@ -373,8 +382,10 @@ if (Emby = 1) {
 			running++
 		if (UserName != "") 
 		{
-			if temp_MB not contains %UserName%
-				temp_MB=%temp_MB% %UserName%
+			if (temp_MB = "")
+				temp_MB=%UserName%
+			else if temp_MB not contains %UserName%
+				temp_MB=%temp_MB%, %UserName%
 		}	
 		;if (Position2 > 0)
 		;	State := floor(Position2)
@@ -691,7 +702,7 @@ Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
 Gui, Font,,
 Gui, Add, Text,xs,Emby Users: 
 Gui, Font,,
-Gui, Add, Text,xm+180 yp vMBT w50,%MB%
+Gui, Add, Text,xm+180 yp vMBT w150,%MB%
 Gui, Add, Text,xs,Emby Recordings: 
 Gui, Font,,
 Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
@@ -710,7 +721,7 @@ Gui, Font,,
 
 ; Column 2
 Gui, Font,,
-Gui, Add, Text,section xp+280 ym+72,Schedule: 
+Gui, Add, Text,section xp+360 ym+62,Schedule: 
 Gui, Font,,
 Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
 Gui, Font,,
@@ -742,6 +753,7 @@ Gui, Add, Text,,Idle before standby:
 Gui, Add, Text,,Monitor shared files:
 Gui, Add, Text,,Extensions to monitor:
 Gui, Add, Text,,Processes:
+Gui, Add, Text,,Ignore processes:
 Gui, Add, Text,,Always on processes:
 Gui, Add, Text,,Monitor SABnzbd D/L's:
 Gui, Add, Text,,SABnzbd URL:
@@ -752,7 +764,7 @@ Gui, Add, Text,,Media idle before standby:
 Gui, Font,Bold,
 Gui, Add, Text,,Other:
 Gui, Font,,
-Gui, Add, Button, default xm+13 yp+60 gButtonSave, Save Settings
+Gui, Add, Button, default xm+13 yp+30 gButtonSave, Save Settings
 Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
 
 ;Gui, Add, Button, yp+30 gRESTARTMYSQL, Restart MySQL
@@ -839,6 +851,7 @@ else
 Gui, Add, Edit, vExtensions r1 w425 xs+130 yp+20, %Extensions%
 	
 Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
+Gui, Add, Edit, vIgnoreProcesses r1 w425 yp+28, %IgnoreProcesses%
 Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
 
  
@@ -944,6 +957,7 @@ StringReplace, Processes, Processes, `,%A_Space%,`,,ALL
 StringReplace, Processes, Processes, %A_Space%`,,`,,ALL
 StringLower, Processes, Processes
 IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
+IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
 IniWrite, %AONProcesses%, %Settings_Path%\power.ini, Sleep, AONProcesses
 IniWrite, %Extensions%, %Settings_Path%\power.ini, Sleep, Extensions
 ;IniWrite, %UpHours%, %Settings_Path%\power.ini, Sleep, UpHours
