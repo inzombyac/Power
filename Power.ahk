@@ -38,13 +38,6 @@ IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
 IniRead, remote, %Settings_Path%\power.ini, Sleep, remote, 1
 IniWrite, %remote%, %Settings_Path%\power.ini, Sleep, remote
 
-IniRead, SABnzbd, %Settings_Path%\power.ini, Sleep, SABnzbd, 1
-IniWrite, %SABnzbd%, %Settings_Path%\power.ini, Sleep, SABnzbd
-IniRead, SABnzbd_URL, %Settings_Path%\power.ini, Sleep, SABnzbd_URL, http://localhost:8080
-IniWrite, %SABnzbd_URL%, %Settings_Path%\power.ini, Sleep, SABnzbd_URL
-IniRead, SABnzbd_API, %Settings_Path%\power.ini, Sleep, SABnzbd_API, 
-IniWrite, %SABnzbd_API%, %Settings_Path%\power.ini, Sleep, SABnzbd_API
-
 IniRead, Emby, %Settings_Path%\power.ini, Sleep, Emby, 1
 IniWrite, %Emby%, %Settings_Path%\power.ini, Sleep, Emby
 IniRead, Emby_URL, %Settings_Path%\power.ini, Sleep, Emby_URL, http://localhost:8096
@@ -258,11 +251,6 @@ if (WHS_Backup = 1)
 	}
 } else {
 	WHS = No
-}
-
-if (SABnzbd = 1) {
-	UrlDownloadToFile, %SABnzbd_URL%/api?mode=qstatus&output=xml&apikey=%SABnzbd_API%, %Settings_Path%\logging\sab.xml
-	FileRead, SAB_state, %Settings_Path%\logging\sab.xml
 }
 
 if (Emby = 1) {
@@ -729,10 +717,6 @@ Gui, Add, Text,xs,WHS backup on:
 Gui, Font,,
 Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
 Gui, Font,,
-Gui, Add, Text,xs,SABnzbd downloading: 
-Gui, Font,,
-Gui, Add, Text,xp+150 yp vSABT w50,%SAB%
-Gui, Font,,
 Gui, Add, Text,xs,Media player processes: 
 Gui, Font,,
 Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
@@ -755,8 +739,6 @@ Gui, Add, Text,,Extensions to monitor:
 Gui, Add, Text,,Processes:
 Gui, Add, Text,,Ignore processes:
 Gui, Add, Text,,Always on processes:
-Gui, Add, Text,,Monitor SABnzbd D/L's:
-Gui, Add, Text,,SABnzbd URL:
 Gui, Add, Text,,Monitor Emby playstate:
 Gui, Add, Text,,Emby URL:
 Gui, Add, Text,,Media Players:
@@ -854,20 +836,6 @@ Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
 Gui, Add, Edit, vIgnoreProcesses r1 w425 yp+28, %IgnoreProcesses%
 Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
 
- 
-if (SABnzbd=1)
-	Gui, Add, Checkbox, yp+28 vSABnzbd checked,
-else 
-	Gui, Add, Checkbox, yp+28 vSABnzbd, 
-Gui, Add, Text,xs+300 yp,Always on when downloading:
-if (aonSAB=1)
-	Gui, Add, Checkbox, xm+470 yp+2 vaonSAB checked,
-else 
-	Gui, Add, Checkbox, xm+470 yp+2 vaonSAB, 
-Gui, Add, Edit, vSABnzbd_URL r1 w180 yp+24 xs+130, %SABnzbd_URL%
-Gui, Add, Text, xp+190 yp+3, API:
-Gui, Add, Edit, vSABnzbd_API r1 w210 xp+25 yp-3, %SABnzbd_API%
-
 if (Emby=1)
 	Gui, Add, Checkbox,xs+130 yp+28 vEmby checked,
 else 
@@ -947,9 +915,6 @@ Gui, Submit
 
 IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
 IniWrite, %remote%, %Settings_Path%\power.ini, Sleep, remote
-IniWrite, %SABnzbd%, %Settings_Path%\power.ini, Sleep, SABnzbd
-IniWrite, %SABnzbd_URL%, %Settings_Path%\power.ini, Sleep, SABnzbd_URL
-IniWrite, %SABnzbd_API%, %Settings_Path%\power.ini, Sleep, SABnzbd_API
 IniWrite, %Emby%, %Settings_Path%\power.ini, Sleep, Emby
 IniWrite, %Emby_URL%, %Settings_Path%\power.ini, Sleep, Emby_URL
 IniWrite, %Emby_API%, %Settings_Path%\power.ini, Sleep, Emby_API
