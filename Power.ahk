@@ -255,15 +255,11 @@ if (WHS_Backup = 1)
 
 if (Emby = 1) {
 	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=xml, %Settings_Path%\logging\emby.xml
-	FileRead, Emby_state, %Settings_Path%\logging\emby.xml
+	FileRead, Emby_state, %Settings_Path%\logging\emby.json
 	
 	UrlDownloadToFile, %Emby_URL%/LiveTv/Recordings?api_key=%Emby_API%&format=json&IsInProgress=1, %Settings_Path%\logging\emby_rec.txt
 	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.txt
 	
-	d3p1	:=	"d3p1:"
-	ns = xmlns=".*?"
-	Emby_state := RegExReplace(Emby_state, ns, "")
-	Emby_state := RegExReplace(Emby_state, d3p1, "")
 }
 
 
@@ -340,53 +336,74 @@ Emby_Recordings=
 
 if (Emby = 1) {
 	
-	x1 := ComObjCreate("MSXML2.DOMDocument.6.0")
-	x1.async := false
-	x1.loadXML(Emby_state)
-	x1titlenodes := x1.selectNodes("/ArrayOfSessionInfoDto/SessionInfoDto") 
-
-	for x1titlenode in x1titlenodes
+	url := Emby_URL "/Sessions?api_key=" Emby_API
+	HttpObj := ComObjCreate("WinHttp.WinHttpRequest.5.1")
+	HttpObj.Open("GET",url)
+	HttpObj.Send()
+	Result := HttpObj.ResponseText
+	
+	; Parse Emby State
+	Loop, Parse, Result, `,
 	{
-		x1_deviceName			:= x1titlenode.selectSingleNode("DeviceName")
-		x1_deviceId				:= x1titlenode.selectSingleNode("DeviceId")
-		x1_client				:= x1titlenode.selectSingleNode("Client")
-		x1_nowPlaying			:= x1titlenode.selectSingleNode("NowPlayingItem/Name")
-		x1_user					:= x1titlenode.selectSingleNode("UserName")
-		x1_length				:= x1titlenode.selectSingleNode("NowPlayingItem/RunTimeTicks")
-		x1_position				:= x1titlenode.selectSingleNode("PlayState/PositionTicks")
-		x1_transcodePosition	:= x1titlenode.selectSingleNode("TranscodingInfo/CompletionPercentage")
-	  
-		DeviceName 	:=	x1_deviceName.text
-		NowPlaying 	:= 	x1_nowPlaying.text
-		Client		:=	x1_client.text
-		DeviceID	:=	x1_deviceId.text
-		UserName	:=	x1_user.text
-		Length		:=	x1_length.text			; Blank for Live TV
-		Position	:=	x1_position.text
-		;Position2	:=	x1_transcodePosition.text
-		State		:= 0
-		
-		if (NowPlaying != "")
-			running++
-		if (UserName != "") 
+		IfInString, A_LoopField, {"Playstate":
 		{
+			UserName:=
+			NowPlayingItem :=
+			Length:= 
+			Position:= 
+			State :=
+		}
+		IfInString, A_LoopField, "UserName"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			UserName:= Array[2]
+			UserName := StrReplace(UserName,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName%
+		}
+		IfInString, A_LoopField, "NowPlayingItem"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			NowPlayingItem:= Array[3]
+			NowPlayingItem := StrReplace(NowPlayingItem,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem%
+		}
+		IfInString, A_LoopField, "RunTimeTicks"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			Length:= Array[2]
+			Length := StrReplace(Length,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Length: %Length%
+		}
+		IfInString, A_LoopField, "PositionTicks"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			Position:= Array[3]
+			Position := StrReplace(Position,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Position: %Position%
+		}
+		If (UserName != "" && NowPlayingItem != "" && Position != "" && Length != "") 
+		{
+			running++		
 			if (temp_MB = "")
 				temp_MB=%UserName%
 			else if temp_MB not contains %UserName%
-				temp_MB=%temp_MB%, %UserName%
-		}	
-		;if (Position2 > 0)
-		;	State := floor(Position2)
-		if (Length > 0 && Position > 0)
-			State := floor((Position/Length)*100)
-		
-		if (State > 0)
-			Emby_Sessions = %Emby_Sessions%%UserName% (%DeviceName%):`t%NowPlaying% (%State%`%)`r`n
-		else if (NowPlaying != "")
-			Emby_Sessions = %Emby_Sessions%%UserName% (%DeviceName%):`t%NowPlaying%`r`n
-		else
-			Emby_Sessions = %Emby_Sessions%%UserName% (%DeviceName%):`r`n
-		
+				temp_MB=%temp_MB%, %UserName%	
+			if (Length > 0 && Position > 0)
+				State := floor((Position/Length)*100)
+			if (State > 0)
+				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem% (%State%`%)`r`n
+			else if (NowPlayingItem != "")
+				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem%`r`n
+			else
+				Emby_Sessions = %Emby_Sessions%%UserName%: :`r`n		
+			;MsgBox,  %UserName% is watching: %NowPlayingItem% (%State%`%)
+			UserName:=
+			NowPlayingItem :=
+			Length:= 
+			Position:=
+			State:=
+			Continue
+		}
 	}
 	MB=%temp_MB%
 	
