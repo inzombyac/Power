@@ -337,10 +337,17 @@ Emby_Recordings=
 if (Emby = 1) {
 	
 	url := Emby_URL "/Sessions?api_key=" Emby_API
-	HttpObj := ComObjCreate("WinHttp.WinHttpRequest.5.1")
-	HttpObj.Open("GET",url)
-	HttpObj.Send()
-	Result := HttpObj.ResponseText
+	Result :=
+	try
+	{
+		HttpObj := ComObjCreate("WinHttp.WinHttpRequest.5.1")
+		HttpObj.Open("GET",url)
+		HttpObj.Send()
+		Result := HttpObj.ResponseText
+	} catch e {
+		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+		FileAppend, %timestart% - Unable to contact Emby server`r`n, %Settings_Path%\logging\power.log
+	}
 	
 	; Parse Emby State
 	Loop, Parse, Result, `,
