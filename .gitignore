@@ -53,3 +53,5 @@ logging/requests.txt
 logging/emby.txt
 logging/emby_rec.txt
 logging/emby.xml
+logging/emby.json
+logging/emby_rec.json

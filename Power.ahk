@@ -254,11 +254,11 @@ if (WHS_Backup = 1)
 }
 
 if (Emby = 1) {
-	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=xml, %Settings_Path%\logging\emby.xml
+	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby.json
 	FileRead, Emby_state, %Settings_Path%\logging\emby.json
 	
-	UrlDownloadToFile, %Emby_URL%/LiveTv/Recordings?api_key=%Emby_API%&format=json&IsInProgress=1, %Settings_Path%\logging\emby_rec.txt
-	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.txt
+	UrlDownloadToFile, %Emby_URL%/LiveTv/Timers?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby_rec.json
+	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.json
 	
 }
 
@@ -329,114 +329,7 @@ IfInstring, SAB_state, <state>Downloading</state>
 else
 	SAB = No
 
-MB=
-temp_MB=
-Emby_Sessions=
-Emby_Recordings= 
-
-if (Emby = 1) {
-	
-	url := Emby_URL "/Sessions?api_key=" Emby_API
-	Result :=
-	try
-	{
-		HttpObj := ComObjCreate("WinHttp.WinHttpRequest.5.1")
-		HttpObj.Open("GET",url)
-		HttpObj.Send()
-		Result := HttpObj.ResponseText
-	} catch e {
-		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-		FileAppend, %timestart% - Unable to contact Emby server`r`n, %Settings_Path%\logging\power.log
-	}
-	
-	; Parse Emby State
-	Loop, Parse, Result, `,
-	{
-		IfInString, A_LoopField, {"Playstate":
-		{
-			UserName:=
-			NowPlayingItem :=
-			Length:= 
-			Position:= 
-			State :=
-		}
-		IfInString, A_LoopField, "UserName"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			UserName:= Array[2]
-			UserName := StrReplace(UserName,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName%
-		}
-		IfInString, A_LoopField, "NowPlayingItem"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			NowPlayingItem:= Array[3]
-			NowPlayingItem := StrReplace(NowPlayingItem,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem%
-		}
-		IfInString, A_LoopField, "RunTimeTicks"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			Length:= Array[2]
-			Length := StrReplace(Length,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Length: %Length%
-		}
-		IfInString, A_LoopField, "PositionTicks"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			Position:= Array[3]
-			Position := StrReplace(Position,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Position: %Position%
-		}
-		If (UserName != "" && NowPlayingItem != "" && Position != "" && Length != "") 
-		{
-			running++		
-			if (temp_MB = "")
-				temp_MB=%UserName%
-			else if temp_MB not contains %UserName%
-				temp_MB=%temp_MB%, %UserName%	
-			if (Length > 0 && Position > 0)
-				State := floor((Position/Length)*100)
-			if (State > 0)
-				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem% (%State%`%)`r`n
-			else if (NowPlayingItem != "")
-				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem%`r`n
-			else
-				Emby_Sessions = %Emby_Sessions%%UserName%: :`r`n		
-			;MsgBox,  %UserName% is watching: %NowPlayingItem% (%State%`%)
-			UserName:=
-			NowPlayingItem :=
-			Length:= 
-			Position:=
-			State:=
-			Continue
-		}
-	}
-	MB=%temp_MB%
-	
-	recordingcount:=0	
-	Loop, parse, Emby_rec_state, `,
-	{
-		IfInstring, A_LoopField, TotalRecordCount
-		{
-			StringReplace, recordingcount, A_Loopfield,`},
-			Loop, parse, recordingcount, :
-			{
-				recordingcount=%A_LoopField%
-			}
-			;MsgBox, %recordingcount%
-		}
-	}
-	if (recordingcount != 0) 
-	{
-		running++
-		EMBYREC=Yes
-	} else {
-		EMBYREC=No
-	}
-} else {
-	EMBYREC=No
-}
+GoSub, ExtractEmbyData
 	
 tfilelist=
 Loop,Read,%Settings_Path%\logging\files.txt 
@@ -565,6 +458,119 @@ Menu,Tray,Tip, Power: %running% blockers
 
 return
 
+ExtractEmbyData:
+MB=
+temp_MB=
+Emby_Sessions=
+Emby_Recordings= 
+
+if (Emby = 1) {
+	
+	url := Emby_URL "/Sessions?api_key=" Emby_API
+	Result :=
+	try
+	{
+		HttpObj := ComObjCreate("WinHttp.WinHttpRequest.5.1")
+		HttpObj.Open("GET",url)
+		HttpObj.Send()
+		Result := HttpObj.ResponseText
+	} catch e {
+		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+		FileAppend, %timestart% - Unable to contact Emby server`r`n, %Settings_Path%\logging\power.log
+	}
+	
+	; Parse Emby State
+	Loop, Parse, Result, `,
+	{
+		IfInString, A_LoopField, {"Playstate":
+		{
+			UserName:=
+			NowPlayingItem :=
+			Length:= 
+			Position:= 
+			State :=
+		}
+		IfInString, A_LoopField, "UserName"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			UserName:= Array[2]
+			UserName := StrReplace(UserName,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName%
+		}
+		IfInString, A_LoopField, "NowPlayingItem"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			NowPlayingItem:= Array[3]
+			NowPlayingItem := StrReplace(NowPlayingItem,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem%
+		}
+		IfInString, A_LoopField, "RunTimeTicks"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			Length:= Array[2]
+			Length := StrReplace(Length,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Length: %Length%
+		}
+		IfInString, A_LoopField, "PositionTicks"
+		{
+			Array := StrSplit(A_LoopField , ":")
+			Position:= Array[3]
+			Position := StrReplace(Position,"""","")
+			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Position: %Position%
+		}
+		If (UserName != "" && NowPlayingItem != "" && Position != "" && Length != "") 
+		{
+			running++		
+			if (temp_MB = "")
+				temp_MB=%UserName%
+			else if temp_MB not contains %UserName%
+				temp_MB=%temp_MB%, %UserName%	
+			if (Length > 0 && Position > 0)
+				State := floor((Position/Length)*100)
+			if (State > 0)
+				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem% (%State%`%)`r`n
+			else if (NowPlayingItem != "")
+				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem%`r`n
+			else
+				Emby_Sessions = %Emby_Sessions%%UserName%: :`r`n		
+			;MsgBox,  %UserName% is watching: %NowPlayingItem% (%State%`%)
+			UserName:=
+			NowPlayingItem :=
+			Length:= 
+			Position:=
+			State:=
+			Continue
+		}
+	}
+	MB=%temp_MB%
+	
+	recordingcount:=0	
+	Loop, parse, Emby_rec_state, `,
+	{
+		IfInstring, A_LoopField, InProgress
+		{
+			StringReplace, recordingcount, A_Loopfield,`},
+			Loop, parse, recordingcount, :
+			{
+				recordingcount=%A_LoopField%
+			}
+			;MsgBox, %recordingcount%
+			; Set Emby_Recordings to something to show status
+		}
+	}
+	if (recordingcount != 0) 
+	{
+		running++
+		EMBYREC=Yes
+	} else {
+		EMBYREC=No
+	}
+} else {
+	EMBYREC=No
+}
+return
+
+
 TimerLoop:
 if perc = 100
 {
@@ -687,234 +693,228 @@ Return
 
 SETTINGS:
 Gui, destroy
-;FileRead, requests, %Settings_Path%\logging\requests.txt
-Gui, +ToolWindow
+if (Visible =1) {
+	;FileRead, requests, %Settings_Path%\logging\requests.txt
+	Gui, +ToolWindow
 
-Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings|Emby
-Gui, Font,,
-Gui, Font,Bold,
-Gui, Add, Text,section,Last Event: 
-Gui, Font,,
-Gui, Add, Text,xm+100 yp vLastEvent w400,%last_log%
-Gui, Font,,
-;Gui, Add, Text,xs,Processes: 
-;Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
-;Gui, Font,,
-Gui, Add, Text,xs,PowerCfg Processes: 
-Gui, Font,,
-Gui, Add, Text,xm+180 yp vproc_reqT w50,%proc_req%
-Gui, Font,,
-Gui, Add, Text,xs,Custom/Always on Processes: 
-Gui, Font,,
-Gui, Add, Text,xm+180 yp vaonprocessT w50,%proc_block%/%proc_block_aon%
-Gui, Font,,
-Gui, Add, Text,xs,Shared Media: 
-Gui, Font,,
-Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
-Gui, Font,,
-Gui, Add, Text,xs,Emby Users: 
-Gui, Font,,
-Gui, Add, Text,xm+180 yp vMBT w150,%MB%
-Gui, Add, Text,xs,Emby Recordings: 
-Gui, Font,,
-Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
-Gui, Font,Bold,
-Gui, Add, Text,xs yp+20,Process blocking: 
-Gui, Font,,
-Gui, Font,, Consolas
-Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
-Gui, Font,,
-Gui, Font,Bold,
-Gui, Add, Text,xs,File Requests:
-Gui, Font,,
-Gui, Font,, Consolas
-Gui, Add, Edit, w560 r14 +Readonly -VScroll vFileListGUI section, %filelist%
-Gui, Font,,
+	Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings|Emby
+	Gui, Font,,
+	Gui, Font,Bold,
+	Gui, Add, Text,section,Last Event: 
+	Gui, Font,,
+	Gui, Add, Text,xm+100 yp vLastEvent w400,%last_log%
+	Gui, Font,,
+	;Gui, Add, Text,xs,Processes: 
+	;Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
+	;Gui, Font,,
+	Gui, Add, Text,xs,PowerCfg Processes: 
+	Gui, Font,,
+	Gui, Add, Text,xm+180 yp vproc_reqT w50,%proc_req%
+	Gui, Font,,
+	Gui, Add, Text,xs,Custom/Always on Processes: 
+	Gui, Font,,
+	Gui, Add, Text,xm+180 yp vaonprocessT w50,%proc_block%/%proc_block_aon%
+	Gui, Font,,
+	Gui, Add, Text,xs,Shared Media: 
+	Gui, Font,,
+	Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
+	Gui, Font,,
+	Gui, Add, Text,xs,Emby Users: 
+	Gui, Font,,
+	Gui, Add, Text,xm+180 yp vMBT w150,%MB%
+	Gui, Add, Text,xs,Emby Recordings: 
+	Gui, Font,,
+	Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
+	Gui, Font,Bold,
+	Gui, Add, Text,xs yp+20,Process blocking: 
+	Gui, Font,,
+	Gui, Font,, Consolas
+	Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
+	Gui, Font,,
+	Gui, Font,Bold,
+	Gui, Add, Text,xs,File Requests:
+	Gui, Font,,
+	Gui, Font,, Consolas
+	Gui, Add, Edit, w560 r14 +Readonly -VScroll vFileListGUI section, %filelist%
+	Gui, Font,,
 
-; Column 2
-Gui, Font,,
-Gui, Add, Text,section xp+360 ym+62,Schedule: 
-Gui, Font,,
-Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
-Gui, Font,,
-Gui, Add, Text,xs,WHS backup on: 
-Gui, Font,,
-Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
-Gui, Font,,
-Gui, Add, Text,xs,Media player processes: 
-Gui, Font,,
-Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
-Gui, Font,,
+	; Column 2
+	Gui, Font,,
+	Gui, Add, Text,section xp+360 ym+62,Schedule: 
+	Gui, Font,,
+	Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
+	Gui, Font,,
+	Gui, Add, Text,xs,WHS backup on: 
+	Gui, Font,,
+	Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
+	Gui, Font,,
+	Gui, Add, Text,xs,Media player processes: 
+	Gui, Font,,
+	Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
+	Gui, Font,,
 
-Gui, Tab, 2
-Gui, Font,Bold,
-Gui, Add, Text,,Scheduling:
-Gui, Font,,
-Gui, Add, Text,,Always On Schedule:
-Gui, Add, Text,yp+43,Forced Sleep Schedule:
-Gui, Add, Text,,
-Gui, Font,Bold,
-Gui, Add, Text,,Keep Awake Monitoring Settings:
-Gui, Font,,
-Gui, Add, Text,section,powercfg /requests:
-Gui, Add, Text,,Idle before standby: 
-Gui, Add, Text,,Monitor shared files:
-Gui, Add, Text,,Extensions to monitor:
-Gui, Add, Text,,Processes:
-Gui, Add, Text,,Ignore processes:
-Gui, Add, Text,,Always on processes:
-Gui, Add, Text,,Monitor Emby playstate:
-Gui, Add, Text,,Emby URL:
-Gui, Add, Text,,Media Players:
-Gui, Add, Text,,Media idle before standby:
-Gui, Font,Bold,
-Gui, Add, Text,,Other:
-Gui, Font,,
-Gui, Add, Button, default xm+13 yp+30 gButtonSave, Save Settings
-Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
+	Gui, Tab, 2
+	Gui, Font,Bold,
+	Gui, Add, Text,,Scheduling:
+	Gui, Font,,
+	Gui, Add, Text,,Always On Schedule:
+	Gui, Add, Text,yp+43,Forced Sleep Schedule:
+	Gui, Add, Text,,
+	Gui, Font,Bold,
+	Gui, Add, Text,,Keep Awake Monitoring Settings:
+	Gui, Font,,
+	Gui, Add, Text,section,powercfg /requests:
+	Gui, Add, Text,,Idle before standby: 
+	Gui, Add, Text,,Monitor shared files:
+	Gui, Add, Text,,Extensions to monitor:
+	Gui, Add, Text,,Processes:
+	Gui, Add, Text,,Ignore processes:
+	Gui, Add, Text,,Always on processes:
+	Gui, Add, Text,,Monitor Emby playstate:
+	Gui, Add, Text,,Emby URL:
+	Gui, Add, Text,,Media Players:
+	Gui, Add, Text,,Media idle before standby:
+	Gui, Font,Bold,
+	Gui, Add, Text,,Other:
+	Gui, Font,,
+	Gui, Add, Button, default xm+13 yp+30 gButtonSave, Save Settings
+	Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
 
-;Gui, Add, Button, yp+30 gRESTARTMYSQL, Restart MySQL
-	
+	;Gui, Add, Button, yp+30 gRESTARTMYSQL, Restart MySQL
+		
 
-; Column 2
-;Gui, Add, Edit, vUpHours r1 w400 xm+150 ym+25, %UpHours%
+	; Column 2
+	;Gui, Add, Edit, vUpHours r1 w400 xm+150 ym+25, %UpHours%
 
-ab:= 1
-xx:= 150
-While ab < 13
-{
-	if (on%ab%=1)
-		Gui, Add, Checkbox, x%xx% ym+47 von%ab% checked, %ab%
+	ab:= 1
+	xx:= 150
+	While ab < 13
+	{
+		if (on%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+47 von%ab% checked, %ab%
+		else 
+			Gui, Add, Checkbox, x%xx% ym+47 von%ab%, %ab%
+		ab++
+		xx+=35
+	}
+	xx:= 150
+	While ab < 25
+	{
+		if (on%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+67 von%ab% checked, %ab%
+		else 
+			Gui, Add, Checkbox, x%xx% ym+67 von%ab%, %ab%
+		ab++
+		xx+=35
+	}
+	; Sleep Hours
+	ab:= 1
+	xx:= 150
+	While ab < 13
+	{
+		if (sleep%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab% checked, %ab%
+		else 
+			Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab%, %ab%
+		ab++
+		xx+=35
+	}
+	xx:= 150
+	While ab < 25
+	{
+		if (sleep%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab% checked, %ab%
+		else 
+			Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab%, %ab%
+		ab++
+		xx+=35
+	}
+	; Power Config Settings
+	if (PCFG_Process=1)
+		Gui, Add, Checkbox, xs+130 ys vPCFG_Process checked, Processes
 	else 
-		Gui, Add, Checkbox, x%xx% ym+47 von%ab%, %ab%
-	ab++
-	xx+=35
-}
-xx:= 150
-While ab < 25
-{
-	if (on%ab%=1)
-		Gui, Add, Checkbox, x%xx% ym+67 von%ab% checked, %ab%
+		Gui, Add, Checkbox, xs+130 ys vPCFG_Process, Processes
+	if (PCFG_Service=1)
+		Gui, Add, Checkbox, xp+100 yp vPCFG_Service checked, Services
 	else 
-		Gui, Add, Checkbox, x%xx% ym+67 von%ab%, %ab%
-	ab++
-	xx+=35
-}
-; Sleep Hours
-ab:= 1
-xx:= 150
-While ab < 13
-{
-	if (sleep%ab%=1)
-		Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab% checked, %ab%
+		Gui, Add, Checkbox, xp+100 yp vPCFG_Service, Services
+	if (PCFG_Driver=1)
+		Gui, Add, Checkbox, xp+100 yp vPCFG_Driver checked, Drivers
 	else 
-		Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab%, %ab%
-	ab++
-	xx+=35
-}
-xx:= 150
-While ab < 25
-{
-	if (sleep%ab%=1)
-		Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab% checked, %ab%
+		Gui, Add, Checkbox, xp+100 yp vPCFG_Driver, Drivers
+	if (WHS_Backup=1)
+		Gui, Add, Checkbox, xp+100 yp vWHS_Backup checked, Backup Service (WHS)
 	else 
-		Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab%, %ab%
-	ab++
-	xx+=35
-}
-; Power Config Settings
-if (PCFG_Process=1)
-	Gui, Add, Checkbox, xs+130 ys vPCFG_Process checked, Processes
-else 
-	Gui, Add, Checkbox, xs+130 ys vPCFG_Process, Processes
-if (PCFG_Service=1)
-	Gui, Add, Checkbox, xp+100 yp vPCFG_Service checked, Services
-else 
-	Gui, Add, Checkbox, xp+100 yp vPCFG_Service, Services
-if (PCFG_Driver=1)
-	Gui, Add, Checkbox, xp+100 yp vPCFG_Driver checked, Drivers
-else 
-	Gui, Add, Checkbox, xp+100 yp vPCFG_Driver, Drivers
-if (WHS_Backup=1)
-	Gui, Add, Checkbox, xp+100 yp vWHS_Backup checked, Backup Service (WHS)
-else 
-	Gui, Add, Checkbox, xp+100 yp vWHS_Backup, Backup Service (WHS)
+		Gui, Add, Checkbox, xp+100 yp vWHS_Backup, Backup Service (WHS)
 
-; Idle
-Gui, Add, Edit, vDelay r1 w100 xs+130 yp+25, %Delay%
-Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
-Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
+	; Idle
+	Gui, Add, Edit, vDelay r1 w100 xs+130 yp+25, %Delay%
+	Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
+	Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
 
-if (remote=1)
-	Gui, Add, Checkbox, xs+130 yp+28 vremote checked,
-else 
-	Gui, Add, Checkbox, xs+130 yp+28 vremote, 	
-Gui, Add, Text,xs+330 yp,Always on when sharing:
-if (aonshare=1)
-	Gui, Add, Checkbox, xm+470 yp+2 vaonshare checked,
-else 
-	Gui, Add, Checkbox, xm+470 yp+2 vaonshare, 	
-Gui, Add, Edit, vExtensions r1 w425 xs+130 yp+20, %Extensions%
-	
-Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
-Gui, Add, Edit, vIgnoreProcesses r1 w425 yp+28, %IgnoreProcesses%
-Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
+	if (remote=1)
+		Gui, Add, Checkbox, xs+130 yp+28 vremote checked,
+	else 
+		Gui, Add, Checkbox, xs+130 yp+28 vremote, 	
+	Gui, Add, Text,xs+330 yp,Always on when sharing:
+	if (aonshare=1)
+		Gui, Add, Checkbox, xm+470 yp+2 vaonshare checked,
+	else 
+		Gui, Add, Checkbox, xm+470 yp+2 vaonshare, 	
+	Gui, Add, Edit, vExtensions r1 w425 xs+130 yp+20, %Extensions%
+		
+	Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
+	Gui, Add, Edit, vIgnoreProcesses r1 w425 yp+28, %IgnoreProcesses%
+	Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
 
-if (Emby=1)
-	Gui, Add, Checkbox,xs+130 yp+28 vEmby checked,
-else 
-	Gui, Add, Checkbox,xs+130 yp+28 vEmby, 
+	if (Emby=1)
+		Gui, Add, Checkbox,xs+130 yp+28 vEmby checked,
+	else 
+		Gui, Add, Checkbox,xs+130 yp+28 vEmby, 
 
-Gui, Add, Edit, vEmby_URL r1 w180 yp+25 xs+130, %Emby_URL%
-Gui, Add, Text, xp+190 yp+3, API:
-Gui, Add, Edit, vEmby_API r1 w210 xp+25 yp-3, %Emby_API%
+	Gui, Add, Edit, vEmby_URL r1 w180 yp+25 xs+130, %Emby_URL%
+	Gui, Add, Text, xp+190 yp+3, API:
+	Gui, Add, Edit, vEmby_API r1 w210 xp+25 yp-3, %Emby_API%
 
-Gui, Add, Edit, vWMCProcesses r1 w425 xs+130 yp+28, %WMCProcesses%
-Gui, Add, Edit, vWMCIdle r1 w100 xs+130 yp+26, %WMCIdle%
-Gui, Add, Text, yp+6 xs+255, (DDHHMM)                Monitor Video Idle:
-if (VPIdle=1)
-	Gui, Add, Checkbox, xm+470 yp vVPIdle checked,
-else 
-	Gui, Add, Checkbox, xm+470 yp vVPIdle, 
+	Gui, Add, Edit, vWMCProcesses r1 w425 xs+130 yp+28, %WMCProcesses%
+	Gui, Add, Edit, vWMCIdle r1 w100 xs+130 yp+26, %WMCIdle%
+	Gui, Add, Text, yp+6 xs+255, (DDHHMM)                Monitor Video Idle:
+	if (VPIdle=1)
+		Gui, Add, Checkbox, xm+470 yp vVPIdle checked,
+	else 
+		Gui, Add, Checkbox, xm+470 yp vVPIdle, 
 
-if (ShowTray=1)
-	Gui, Add, Checkbox, xs+130 yp+24 vShowTray checked, Enable Tray tip
-else 
-	Gui, Add, Checkbox, xs+130 yp+24 vShowTray, Enable Tray tip
+	if (ShowTray=1)
+		Gui, Add, Checkbox, xs+130 yp+24 vShowTray checked, Enable Tray tip
+	else 
+		Gui, Add, Checkbox, xs+130 yp+24 vShowTray, Enable Tray tip
 
-Gui, Tab, 3
-Gui, Font,Bold,
-Gui, Add, Text,section,Emby Sessions:
-Gui, Font,,
-Gui, Font,, Consolas
-Gui, Add, Edit, xs w560 r20 +Readonly -VScroll vEmbyList section, %Emby_Sessions%
-Gui, Font,,
-Gui, Font,Bold,
-Gui, Add, Text,section,Emby Recordings:
-Gui, Font,,
-Gui, Font,, Consolas
-Gui, Add, Edit, xs w560 r19 +Readonly -VScroll vEmbyRecList section, %Emby_Recordings%
-Gui, Font,,
-;Close tab 
-Gui, Tab
+	Gui, Tab, 3
+	Gui, Font,Bold,
+	Gui, Add, Text,section,Emby Sessions:
+	Gui, Font,,
+	Gui, Font,, Consolas
+	Gui, Add, Edit, xs w560 r20 +Readonly -VScroll vEmbyList section, %Emby_Sessions%
+	Gui, Font,,
+	Gui, Font,Bold,
+	Gui, Add, Text,section,Emby Recordings:
+	Gui, Font,,
+	Gui, Font,, Consolas
+	Gui, Add, Edit, xs w560 r19 +Readonly -VScroll vEmbyRecList section, %Emby_Recordings%
+	Gui, Font,,
+	;Close tab 
+	Gui, Tab
 
-Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
-Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
-Gui, Add, Text, ym x475 vUpdate, Updated: %last_refresh%
-;Gui, Add, Button, yp xm+475 w50 gKILL vKillBtn disabled, Restart
+	Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
+	Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
+	Gui, Add, Text, ym x475 vUpdate, Updated: %last_refresh%
+	;Gui, Add, Button, yp xm+475 w50 gKILL vKillBtn disabled, Restart
 
-If (Visible =1) {
 	if (xPos > 0 && yPos > 0)
 		Gui, Show, x%xPos% y%yPos% h620 w600, Power
-	Else
+	else
 		Gui, Show, x145 y100 h620 w600, Power
-} else {
-	Gui, Show, x%Max_Width% y%Max_Height% h620 w600, Power
 }
-if (visible = 1)
-	Winset, Alwaysontop, ON , Power ahk_class AutoHotkeyGUI
-else
-	Winset, Alwaysontop, OFF , Power ahk_class AutoHotkeyGUI
 return
 
 GuiClose:
@@ -924,7 +924,6 @@ IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
 Visible = 0
 IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
 Gui, destroy
-GoSub, SETTINGS
 return
 
 ButtonLog:
