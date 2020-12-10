@@ -3,6 +3,8 @@
 #HotkeyInterval 99000000
 #KeyHistory 0
 #SingleInstance force
+#Include %A_ScriptDir%\lib\emby.ahk
+#Include %A_ScriptDir%\lib\traymenu.ahk
 ListLines Off
 Process, Priority, , A
 SetBatchLines, -1
@@ -25,9 +27,9 @@ DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 SetWorkingDir %A_ScriptDir% 
 Settings_Path = %A_ScriptDir% 
 FileCreateDir, %Settings_Path%\logging
-perc := 0
-on:=0
-round:=0
+IdlePercent := 0
+ScheduledOn:=0
+IdleRound:=0
 OnMessage(0x404, "AHK_NOTIFYICON") ; WM_USER + 4
 
 ; Sleep Settings
@@ -35,8 +37,8 @@ IniRead, Delay, %Settings_Path%\power.ini, Sleep, Delay, 000010
 if (Delay < 0)
 	Delay=000010
 IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
-IniRead, remote, %Settings_Path%\power.ini, Sleep, remote, 1
-IniWrite, %remote%, %Settings_Path%\power.ini, Sleep, remote
+IniRead, SharedFiles, %Settings_Path%\power.ini, Sleep, SharedFiles, 1
+IniWrite, %SharedFiles%, %Settings_Path%\power.ini, Sleep, SharedFiles
 
 IniRead, Emby, %Settings_Path%\power.ini, Sleep, Emby, 1
 IniWrite, %Emby%, %Settings_Path%\power.ini, Sleep, Emby
@@ -45,7 +47,7 @@ IniWrite, %Emby_URL%, %Settings_Path%\power.ini, Sleep, Emby_URL
 IniRead, Emby_API, %Settings_Path%\power.ini, Sleep, Emby_API, 
 IniWrite, %Emby_API%, %Settings_Path%\power.ini, Sleep, Emby_API
 
-IniRead, Processes, %Settings_Path%\power.ini, Sleep, Processes, php.exe,postprocess.exe,comskip.exe,teracopy.exe
+IniRead, Processes, %Settings_Path%\power.ini, Sleep, Processes, postprocess.exe,comskip.exe,ffmpeg.exe
 IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
 
 IniRead, IgnoreProcesses, %Settings_Path%\power.ini, Sleep, IgnoreProcesses, MediaBrowser.ServerApplication.exe
@@ -54,7 +56,7 @@ IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
 IniRead, AONProcesses, %Settings_Path%\power.ini, Sleep, AONProcesses, teracopy.exe
 IniWrite, %AONProcesses%, %Settings_Path%\power.ini, Sleep, AONProcesses
 
-IniRead, Extensions, %Settings_Path%\power.ini, Sleep, Extensions, .mkv,.avi,.wtv,.exe,.iso,.mp4,.wtv
+IniRead, Extensions, %Settings_Path%\power.ini, Sleep, Extensions, .mkv,.avi,.wtv,.exe,.iso,.mp4,.wtv,.ts
 IniWrite, %Extensions%, %Settings_Path%\power.ini, Sleep, Extensions
 
 IniRead, WHS_Backup, %Settings_Path%\power.ini, Sleep, WHS_Backup, 1
@@ -70,15 +72,12 @@ IniRead, PCFG_Driver, %Settings_Path%\power.ini, Sleep, PCFG_Driver, 0
 IniWrite, %PCFG_Driver%, %Settings_Path%\power.ini, Sleep, PCFG_Driver
 
 ; Schedule
-aa:= 1
-While aa < 25
+Loop, 24
 {
-	IniRead, on%aa%, %Settings_Path%\power.ini, Schedule, on%aa%, 0
-	IniWrite, % on%aa%, %Settings_Path%\power.ini, Schedule, on%aa%
-	
-	IniRead, sleep%aa%, %Settings_Path%\power.ini, Schedule, sleep%aa%, 0
-	IniWrite, % sleep%aa%, %Settings_Path%\power.ini, Schedule, sleep%aa%
-	aa++
+	IniRead, ScheduledOn%A_Index%, %Settings_Path%\power.ini, Schedule, ScheduledOn%A_Index%, 0
+	IniWrite, % ScheduledOn%A_Index%, %Settings_Path%\power.ini, Schedule, ScheduledOn%A_Index%	
+	IniRead, ForcedSleep%A_Index%, %Settings_Path%\power.ini, Schedule, ForcedSleep%A_Index%, 0
+	IniWrite, % ForcedSleep%A_Index%, %Settings_Path%\power.ini, Schedule, ForcedSleep%A_Index%
 }
 
 ; Always On
@@ -111,8 +110,6 @@ if (WMCIdle < 0)
 IniWrite, %WMCIdle%, %Settings_Path%\power.ini, Video, WMCIdle
 VPI = No
 
-; Add settings for these
-
 ; Display variables
 FormatTime, last_refresh,,MM/dd HH:mm
 plist=
@@ -135,9 +132,9 @@ Emby_Sessions=
 Emby_Recordings=
 
 ; Tray Menu
-GoSub, TRAYMENU
-
+BuildTrayMenu() 
 GoSub, SETTINGS
+; TODO: Move to function
 StringMid ,DelayD, Delay,1, 2
 StringMid ,DelayH, Delay,3, 2
 StringMid ,Delaym, Delay,5, 2
@@ -254,14 +251,8 @@ if (WHS_Backup = 1)
 }
 
 if (Emby = 1) {
-	UrlDownloadToFile, %Emby_URL%/Sessions?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby.json
-	FileRead, Emby_state, %Settings_Path%\logging\emby.json
-	
-	UrlDownloadToFile, %Emby_URL%/LiveTv/Timers?api_key=%Emby_API%&format=json, %Settings_Path%\logging\emby_rec.json
-	FileRead, Emby_rec_state, %Settings_Path%\logging\emby_rec.json
-	
+	EmbyStatus(Emby_URL, Emby_API, Settings_Path)
 }
-
 
 Lastline:=
 Loop, read, %Settings_Path%\logging\power.log
@@ -329,8 +320,14 @@ IfInstring, SAB_state, <state>Downloading</state>
 else
 	SAB = No
 
-GoSub, ExtractEmbyData
-	
+; Emby server status
+EmbySessions=
+temp_MB=
+Emby_Sessions=
+Emby_Recordings= 
+if (Emby = 1) {
+	;GoSub, ExtractEmbyData
+}	
 tfilelist=
 Loop,Read,%Settings_Path%\logging\files.txt 
 {
@@ -360,7 +357,7 @@ FormatTime, cur_hour,,HH
 cur_hour := cur_hour * 1
 if (cur_hour=0)
 	cur_hour=24
-if (on%cur_hour% = 1) {
+if (ScheduledOn%cur_hour% = 1) {
 	schedule=Yes
 	running++
 }
@@ -376,7 +373,7 @@ if (proc_block_aon = "Yes") {
 } else If ((vpproc > 0 ) && (VPIdle = 1) && (vpproc = running)){
 	if (TimeIdle > (WMCDelay-Delaysec))
 	{
-		on:=1
+		ScheduledOn:=1
 		SetTimer, UpdateOSD, 1000
 		SetTimer, TimerLoop, 1000
 		Menu, Tray, Icon, sleep.ico
@@ -388,7 +385,7 @@ if (proc_block_aon = "Yes") {
 		else
 			Menu, Tray, Icon, normal.ico
 	}
-} else if (sleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) {
+} else if (ForcedSleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) {
 	;MsgBox, %proc_block_aon%
 	; If always on processes are going, don't sleep
 	if (aonshare = 1 && temp_file > 0) {
@@ -407,7 +404,7 @@ if (proc_block_aon = "Yes") {
 	} else {
 		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm 
 		;FileAppend, %timestart% - Force Sleep Schedule `r`n, %Settings_Path%\logging\power.log
-		on:=1
+		ScheduledOn:=1
 		SetTimer, UpdateOSD, 1000
 		SetTimer, TimerLoop, 1000
 		Menu, Tray, Icon, sleep.ico
@@ -424,7 +421,7 @@ if (proc_block_aon = "Yes") {
 
 ; Otherwise time to sleep		
 } else {
-	on:=1
+	ScheduledOn:=1
 	SetTimer, UpdateOSD, 1000
 	SetTimer, TimerLoop, 1000
 	Menu, Tray, Icon, sleep.ico
@@ -437,10 +434,10 @@ if (Visible = 1)
 	GuiControl,, proc_reqT,%proc_req%
 	GuiControl,, aonprocessT,%proc_block%/%proc_block_aon%
 	GuiControl,, SABT,%SAB%
-	GuiControl,, MBT,%MB%
+	GuiControl,, EmbySessionsT,%EmbySessions%
 	GuiControl,, VPIT,%VPI%
 	GuiControl,, WHST,%WHS%
-	GuiControl,, EMBYRECT,%EMBYREC%
+	GuiControl,, EmbyRecordingsT,%EmbyRecordings%
 	GuiControl,, psfileT,%psfile%
 	GuiControl,, scheduleT,%schedule%
 	GuiControl,, MyEdit,%requests%
@@ -458,121 +455,8 @@ Menu,Tray,Tip, Power: %running% blockers
 
 return
 
-ExtractEmbyData:
-MB=
-temp_MB=
-Emby_Sessions=
-Emby_Recordings= 
-
-if (Emby = 1) {
-	
-	url := Emby_URL "/Sessions?api_key=" Emby_API
-	Result :=
-	try
-	{
-		HttpObj := ComObjCreate("WinHttp.WinHttpRequest.5.1")
-		HttpObj.Open("GET",url)
-		HttpObj.Send()
-		Result := HttpObj.ResponseText
-	} catch e {
-		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-		FileAppend, %timestart% - Unable to contact Emby server`r`n, %Settings_Path%\logging\power.log
-	}
-	
-	; Parse Emby State
-	Loop, Parse, Result, `,
-	{
-		IfInString, A_LoopField, {"Playstate":
-		{
-			UserName:=
-			NowPlayingItem :=
-			Length:= 
-			Position:= 
-			State :=
-		}
-		IfInString, A_LoopField, "UserName"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			UserName:= Array[2]
-			UserName := StrReplace(UserName,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName%
-		}
-		IfInString, A_LoopField, "NowPlayingItem"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			NowPlayingItem:= Array[3]
-			NowPlayingItem := StrReplace(NowPlayingItem,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem%
-		}
-		IfInString, A_LoopField, "RunTimeTicks"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			Length:= Array[2]
-			Length := StrReplace(Length,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Length: %Length%
-		}
-		IfInString, A_LoopField, "PositionTicks"
-		{
-			Array := StrSplit(A_LoopField , ":")
-			Position:= Array[3]
-			Position := StrReplace(Position,"""","")
-			;MsgBox,  %A_LoopField% UserName: %UserName% Now Playing: %NowPlayingItem% Position: %Position%
-		}
-		If (UserName != "" && NowPlayingItem != "" && Position != "" && Length != "") 
-		{
-			running++		
-			if (temp_MB = "")
-				temp_MB=%UserName%
-			else if temp_MB not contains %UserName%
-				temp_MB=%temp_MB%, %UserName%	
-			if (Length > 0 && Position > 0)
-				State := floor((Position/Length)*100)
-			if (State > 0)
-				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem% (%State%`%)`r`n
-			else if (NowPlayingItem != "")
-				Emby_Sessions = %Emby_Sessions%%UserName%: `t%NowPlayingItem%`r`n
-			else
-				Emby_Sessions = %Emby_Sessions%%UserName%: :`r`n		
-			;MsgBox,  %UserName% is watching: %NowPlayingItem% (%State%`%)
-			UserName:=
-			NowPlayingItem :=
-			Length:= 
-			Position:=
-			State:=
-			Continue
-		}
-	}
-	MB=%temp_MB%
-	
-	recordingcount:=0	
-	Loop, parse, Emby_rec_state, `,
-	{
-		IfInstring, A_LoopField, InProgress
-		{
-			StringReplace, recordingcount, A_Loopfield,`},
-			Loop, parse, recordingcount, :
-			{
-				recordingcount=%A_LoopField%
-			}
-			;MsgBox, %recordingcount%
-			; Set Emby_Recordings to something to show status
-		}
-	}
-	if (recordingcount != 0) 
-	{
-		running++
-		EMBYREC=Yes
-	} else {
-		EMBYREC=No
-	}
-} else {
-	EMBYREC=No
-}
-return
-
-
 TimerLoop:
-if perc = 100
+if IdlePercent = 100
 {
 	;MsgBox,0,Warning,Windows will now go to sleep,3
 	if (Visible = 1)
@@ -586,48 +470,48 @@ if perc = 100
 Return
 
 SLEEP:
-FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
-if (VPIdle = 1)
-{
-	Loop, parse, WMCProcesses, `,
+	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+	FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
+	if (VPIdle = 1)
 	{
-		Process, Close, %A_LoopField%
+		Loop, parse, WMCProcesses, `,
+		{
+			Process, Close, %A_LoopField%
+		}
 	}
-}
-RunWait, sleep.exe
-Sleep, %RefreshInt%
-FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
-MouseMove, 1 , 1,, R
-MouseMove, -1,-1,, R
-GoSub, Reset
+	RunWait, sleep.exe
+	Sleep, %RefreshInt%
+	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+	FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
+	MouseMove, 1 , 1,, R
+	MouseMove, -1,-1,, R
+	GoSub, Reset
 Return
 
-SLEEPNOW:
-FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
-DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
-Sleep, %RefreshInt%
-FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
-MouseMove, 1 , 1,, R
-MouseMove, -1,-1,, R
-GoSub, Reset
-Return
+SleepNow:
+	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+	FileAppend, %timestart% - Sleep Activated`r`n, %Settings_Path%\logging\power.log
+	DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
+	Sleep, %RefreshInt%
+	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+	FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
+	MouseMove, 1 , 1,, R
+	MouseMove, -1,-1,, R
+	GoSub, Reset
+return
 
 UpdateOSD:
 mysec := EndTime
 EnvSub, mysec, %A_Now%, seconds
 var := FormatSeconds( mysec )
-perc := ((StartTime-mysec)/StartTime)*100
-perc := Floor(perc)
-if (perc > 100 || perc < 0) {
+IdlePercent := ((StartTime-mysec)/StartTime)*100
+IdlePercent := Floor(IdlePercent)
+if (IdlePercent > 100 || IdlePercent < 0) {
 	TrayTip
 	return
 }
-If (on = 1 or var < 30) {
-	if (round > 3 ) {
+If (ScheduledOn = 1 or var < 30) {
+	if (IdleRound > 3 ) {
 		if (ShowTray = 1) {
 			TrayTip, Power, Time Remaining: %var%, 30,2
 			;FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
@@ -635,10 +519,10 @@ If (on = 1 or var < 30) {
 		}
 		;
 	} else {
-		round++
+		IdleRound++
 	}
 } else {
-	round:= 0
+	IdleRound:= 0
 	;DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 }
 return
@@ -674,9 +558,9 @@ EnvSub StartTime, EndTime, seconds
 
 StartTime := Abs(StartTime)
 StartVideoTime := Abs(StartVideoTime)
-perc := 0 ;Resets percentage to 0, otherwise this loop never sees the counter reset
-on:=0
-round:=0
+IdlePercent := 0 ;Resets percentage to 0, otherwise this loop never sees the counter reset
+ScheduledOn:=0
+IdleRound:=0
 var:=
 DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 return
@@ -719,12 +603,12 @@ if (Visible =1) {
 	Gui, Font,,
 	Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
 	Gui, Font,,
-	Gui, Add, Text,xs,Emby Users: 
+	Gui, Add, Text,xs,Emby Sessions: 
 	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vMBT w150,%MB%
+	Gui, Add, Text,xm+180 yp vEmbySessionsT w150,%EmbySessions%
 	Gui, Add, Text,xs,Emby Recordings: 
 	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vEMBYRECT w50,%EMBYREC%
+	Gui, Add, Text,xm+180 yp vEmbyRecordingsT w50,%EmbyRecordings%
 	Gui, Font,Bold,
 	Gui, Add, Text,xs yp+20,Process blocking: 
 	Gui, Font,,
@@ -790,20 +674,20 @@ if (Visible =1) {
 	xx:= 150
 	While ab < 13
 	{
-		if (on%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+47 von%ab% checked, %ab%
+		if (ScheduledOn%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+47 vScheduledOn%ab% checked, %ab%
 		else 
-			Gui, Add, Checkbox, x%xx% ym+47 von%ab%, %ab%
+			Gui, Add, Checkbox, x%xx% ym+47 vScheduledOn%ab%, %ab%
 		ab++
 		xx+=35
 	}
 	xx:= 150
 	While ab < 25
 	{
-		if (on%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+67 von%ab% checked, %ab%
+		if (ScheduledOn%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+67 vScheduledOn%ab% checked, %ab%
 		else 
-			Gui, Add, Checkbox, x%xx% ym+67 von%ab%, %ab%
+			Gui, Add, Checkbox, x%xx% ym+67 vScheduledOn%ab%, %ab%
 		ab++
 		xx+=35
 	}
@@ -812,20 +696,20 @@ if (Visible =1) {
 	xx:= 150
 	While ab < 13
 	{
-		if (sleep%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab% checked, %ab%
+		if (ForcedSleep%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+92 vForcedSleep%ab% checked, %ab%
 		else 
-			Gui, Add, Checkbox, x%xx% ym+92 vsleep%ab%, %ab%
+			Gui, Add, Checkbox, x%xx% ym+92 vForcedSleep%ab%, %ab%
 		ab++
 		xx+=35
 	}
 	xx:= 150
 	While ab < 25
 	{
-		if (sleep%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab% checked, %ab%
+		if (ForcedSleep%ab%=1)
+			Gui, Add, Checkbox, x%xx% ym+112 vForcedSleep%ab% checked, %ab%
 		else 
-			Gui, Add, Checkbox, x%xx% ym+112 vsleep%ab%, %ab%
+			Gui, Add, Checkbox, x%xx% ym+112 vForcedSleep%ab%, %ab%
 		ab++
 		xx+=35
 	}
@@ -852,10 +736,10 @@ if (Visible =1) {
 	Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
 	Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
 
-	if (remote=1)
-		Gui, Add, Checkbox, xs+130 yp+28 vremote checked,
+	if (SharedFiles=1)
+		Gui, Add, Checkbox, xs+130 yp+28 vSharedFiles checked,
 	else 
-		Gui, Add, Checkbox, xs+130 yp+28 vremote, 	
+		Gui, Add, Checkbox, xs+130 yp+28 vSharedFiles, 	
 	Gui, Add, Text,xs+330 yp,Always on when sharing:
 	if (aonshare=1)
 		Gui, Add, Checkbox, xm+470 yp+2 vaonshare checked,
@@ -937,7 +821,7 @@ IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
 Gui, Submit
 
 IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
-IniWrite, %remote%, %Settings_Path%\power.ini, Sleep, remote
+IniWrite, %SharedFiles%, %Settings_Path%\power.ini, Sleep, SharedFiles
 IniWrite, %Emby%, %Settings_Path%\power.ini, Sleep, Emby
 IniWrite, %Emby_URL%, %Settings_Path%\power.ini, Sleep, Emby_URL
 IniWrite, %Emby_API%, %Settings_Path%\power.ini, Sleep, Emby_API
@@ -961,12 +845,10 @@ IniWrite, %PCFG_Process%, %Settings_Path%\power.ini, Sleep, PCFG_Process
 IniWrite, %PCFG_Service%, %Settings_Path%\power.ini, Sleep, PCFG_Service
 IniWrite, %PCFG_Driver%, %Settings_Path%\power.ini, Sleep, PCFG_Driver
 
-ac:= 1
-While ac < 25
+Loop, 24
 {
-	IniWrite, % on%ac%, %Settings_Path%\power.ini, Schedule, on%ac%
-	IniWrite, % sleep%ac%, %Settings_Path%\power.ini, Schedule, sleep%ac%
-	ac++
+	IniWrite, % ScheduledOn%A_Index%, %Settings_Path%\power.ini, Schedule, ScheduledOn%A_Index%
+	IniWrite, % ForcedSleep%A_Index%, %Settings_Path%\power.ini, Schedule, ForcedSleep%A_Index%
 }
 IniWrite, %aonshare%, %Settings_Path%\power.ini, Always ON, aonshare
 IniWrite, %aonSAB%, %Settings_Path%\power.ini, Always ON, aonSAB
@@ -983,62 +865,13 @@ IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
 GoSub, Reload
 return
 
-
-TRAYMENU:
-Suspend, Permit
-Menu,Tray,NoStandard 
-Menu,Tray,DeleteAll
-Menu,Tray,Add, Sleep, SLEEPNOW
-;Menu,Tray, Add, Settings, SETTINGS
-Menu,Tray,Add
-Menu,Tray,Add,Reset,Reload
-if (!A_iscompiled)
-	Menu,Tray,Add,Edit This Script, EDIT
-
-Menu,Tray,Add, Exit, Exit
-Menu,Tray,Tip, Power: %running% blockers
-Menu,Tray, Icon, normal.ico,1
+RELOAD: 
+	Suspend, Permit
+	Reload
 return
 
 
-AHK_NOTIFYICON(wParam, lParam)
-{
-   Global click
 
-   If lParam = 0x201 ; WM_LBUTTONUP
-   {
-      click = 1
-      SetTimer, clickcheck, -250
-      Return 0
-   }
-   Else If lParam = 0x203 ; WM_LBUTTONDBLCLK   
-   {
-      click = 2
-      Return 0
-   }
-}
-
-clickcheck:
-If (GetKeyState("Shift", "P") && click = 1)
-{
-   ;Msgbox Shift+1
-}   
-Else If (GetKeyState("Shift", "P") && click = 2)
-{
-   ;
-}   
-Else If click = 1
-{
-   if (Visible = 1){
-	WinActivate, Power ahk_class AutoHotkeyGUI
-   }
-}
-Else If click = 2
-{
-   GoSub, TOGGLE
-}
-return
-;
 
 TOGGLE:
 ;menu, Tray, ToggleCheck, Show GUI
@@ -1055,16 +888,7 @@ GoSub, SETTINGS
 IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
 Return
 
-; Reload option in tray
-RELOAD:
-Suspend, Permit
-Reload
-return
 
-; Edit this script
-EDIT:
-Edit
-return
 
 Exit:
 DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)

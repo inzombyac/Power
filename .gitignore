@@ -55,3 +55,6 @@ logging/emby_rec.txt
 logging/emby.xml
 logging/emby.json
 logging/emby_rec.json
+logging/emby_rec_test.json
+logging/ebystate.json
+JSON_Test.ahk
