@@ -870,46 +870,6 @@ RELOAD:
 	Reload
 return
 
-AHK_NOTIFYICON(wParam, lParam)
-{
-   Global click
-
-   If lParam = 0x201 ; WM_LBUTTONUP
-   {
-      click = 1
-      SetTimer, clickcheck, -250
-      Return 0
-   }
-   Else If lParam = 0x203 ; WM_LBUTTONDBLCLK   
-   {
-      click = 2
-      Return 0
-   }
-}
-
-clickcheck:
-If (GetKeyState("Shift", "P") && click = 1)
-{
-   ;Msgbox Shift+1
-}   
-Else If (GetKeyState("Shift", "P") && click = 2)
-{
-   ;
-}   
-Else If click = 1
-{
-   if (Visible = 1){
-	WinActivate, Power ahk_class AutoHotkeyGUI
-   }
-}
-Else If click = 2
-{
-   GoSub, TOGGLE
-}
-return
-;
-
-
 TOGGLE:
 ;menu, Tray, ToggleCheck, Show GUI
 if (Visible = 1) {

@@ -32,6 +32,14 @@ Exit()
 	return
 }
 
+AHK_NOTIFYICON(wParam, lParam)
+{
+   if (lParam = 0x201 or lParam = 0x203) ; Click or double click
+   {
+      GoSub, TOGGLE
+      Return 0
+   }
+}
 
 ;
 
