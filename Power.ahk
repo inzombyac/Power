@@ -3,7 +3,6 @@
 #HotkeyInterval 99000000
 #KeyHistory 0
 #SingleInstance force
-#Include %A_ScriptDir%\lib\traymenu.ahk
 ListLines Off
 Process, Priority, , A
 SetBatchLines, -1
@@ -75,12 +74,10 @@ Loop, 24
 ; Always On
 IniRead, aonshare, %Settings_Path%\power.ini, Always ON, aonshare, 1
 IniWrite, %aonshare%, %Settings_Path%\power.ini, Always ON, aonshare
-IniRead, aonSAB, %Settings_Path%\power.ini, Always ON, aonSAB, 0
-IniWrite, %aonSAB%, %Settings_Path%\power.ini, Always ON, aonSAB
 
 ;Gui settings
-IniRead, Visible, %Settings_Path%\power.ini, GUI, Visible, 1
-IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
+IniRead, debugMode, %A_ScriptDir%\power.ini, Display, debugMode, 0
+IniWrite, %debugMode%, %A_ScriptDir%\power.ini, Display, debugMode
 IniRead, RefreshInt, %Settings_Path%\power.ini, GUI, RefreshInt, 60000
 IniWrite, %RefreshInt%, %Settings_Path%\power.ini, GUI, RefreshInt
 
@@ -104,9 +101,8 @@ VPI = No
 FormatTime, last_refresh,,MM/dd HH:mm
 plist=
 proc_req = No
-psfile = 0 files
+psfile:= 0
 schedule = No
-SAB = No
 WHS = No
 MB = No
 FormatTime, cur_hour,,HH
@@ -119,8 +115,7 @@ Max_Height=%A_ScreenHeight%
 requests=
 
 ; Tray Menu
-BuildTrayMenu() 
-GoSub, SETTINGS
+GoSub, TrayMenu 
 ; TODO: Move to function
 StringMid ,DelayD, Delay,1, 2
 StringMid ,DelayH, Delay,3, 2
@@ -146,300 +141,265 @@ FileAppend, %timestart% - Application Started`r`n, %Settings_Path%\logging\power
 return
 
 StatusCheck:
-runwait,%comspec% /c powercfg -requests > requests.txt,%Settings_Path%\logging,hide,
-runwait,%comspec% /c %A_ScriptDir%\bin\psfile.exe > files.txt,%Settings_Path%\logging,hide,
-FileRead, requests_raw, %Settings_Path%\logging\requests.txt
+	runwait,%comspec% /c powercfg -requests > requests.txt,%Settings_Path%\logging,hide,
+	runwait,%comspec% /c %A_ScriptDir%\bin\psfile.exe > files.txt,%Settings_Path%\logging,hide,
+	FileRead, requests_raw, %Settings_Path%\logging\requests.txt
 
-; Any process requesting the system is allowed.  Exclude for this application
-running := 0
-plist=
-requests_temp=
-proc_req = No
-Loop, read, %Settings_Path%\logging\requests.txt
-{
-	IfInString, A_LoopReadLine, [PROCESS]
+	; Any process requesting the system is allowed.  Exclude for this application
+	running := 0
+	plist=
+	requests_temp=
+	proc_req = No
+	Loop, read, %Settings_Path%\logging\requests.txt
 	{
-		If (PCFG_Process = 1)
-		{			
-			if (!A_iscompiled)
-			{
-				IfNotInstring, A_LoopReadLine, autohotkey.exe
+		IfInString, A_LoopReadLine, [PROCESS]
+		{
+			If (PCFG_Process = 1)
+			{			
+				if (!A_iscompiled)
 				{
-					StringSplit, Array, A_LoopReadLine,\,
-					LastItem:=Array%Array0%
-					IfNotInstring, requests_temp, %LastItem% 
+					IfNotInstring, A_LoopReadLine, autohotkey.exe
 					{
-						If IgnoreProcesses not contains %LastItem% 
+						StringSplit, Array, A_LoopReadLine,\,
+						LastItem:=Array%Array0%
+						IfNotInstring, requests_temp, %LastItem% 
 						{
-							running++
-							requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
-							proc_req = Yes
-							plist = %plist% %LastItem%
+							If IgnoreProcesses not contains %LastItem% 
+							{
+								running++
+								requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
+								proc_req = Yes
+								plist = %plist% %LastItem%
+							}
+						}
+					}
+				} else {
+					IfNotInstring, A_LoopReadLine, Power.exe
+					{
+						StringSplit, Array, A_LoopReadLine,\,
+						LastItem:=Array%Array0%
+						IfNotInstring, requests_temp, %LastItem% 
+						{
+							If IgnoreProcesses not contains %LastItem% 
+							{
+								running++
+								requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
+								proc_req = Yes
+								plist = %plist% %LastItem%
+							}
 						}
 					}
 				}
-			} else {
-				IfNotInstring, A_LoopReadLine, Power.exe
+			}
+		}
+		IfInString, A_LoopReadLine, [SERVICE]
+		{
+			If (PCFG_Service = 1)
+			{
+				If requests_temp not contains %A_LoopReadLine% 
 				{
-					StringSplit, Array, A_LoopReadLine,\,
-					LastItem:=Array%Array0%
-					IfNotInstring, requests_temp, %LastItem% 
-					{
-						If IgnoreProcesses not contains %LastItem% 
-						{
-							running++
-							requests_temp=[POWERCFG] %LastItem%`r`n%requests_temp%
-							proc_req = Yes
-							plist = %plist% %LastItem%
-						}
-					}
+					running++
+					requests_temp=%A_LoopReadLine%`r`n%requests_temp%
+					proc_req = Yes
+				}
+			}
+		}
+		IfInString, A_LoopReadLine, [DRIVER]
+		{
+			If (PCFG_Driver = 1)
+			{
+				If requests_temp not contains %A_LoopReadLine% 
+				{
+					running++
+					requests_temp=%A_LoopReadLine%`r`n%requests_temp%
+					proc_req = Yes
 				}
 			}
 		}
 	}
-	IfInString, A_LoopReadLine, [SERVICE]
-	{
-		If (PCFG_Service = 1)
-		{
-			If requests_temp not contains %A_LoopReadLine% 
-			{
-				running++
-				requests_temp=%A_LoopReadLine%`r`n%requests_temp%
-				proc_req = Yes
-			}
-		}
-	}
-	IfInString, A_LoopReadLine, [DRIVER]
-	{
-		If (PCFG_Driver = 1)
-		{
-			If requests_temp not contains %A_LoopReadLine% 
-			{
-				running++
-				requests_temp=%A_LoopReadLine%`r`n%requests_temp%
-				proc_req = Yes
-			}
-		}
-	}
-}
-requests:=Trim(requests_temp)
+	requests:=Trim(requests_temp)
 
-if (WHS_Backup = 1) 
-{
-	IfInstring, requests_raw, WSS_ComputerBackupProviderSvc
+	if (WHS_Backup = 1) 
 	{
-		running++
-		WHS = Yes
+		IfInstring, requests_raw, WSS_ComputerBackupProviderSvc
+		{
+			running++
+			WHS = Yes
+		} else {
+			WHS = No
+		}
 	} else {
 		WHS = No
 	}
-} else {
-	WHS = No
-}
 
 
-Lastline:=
-Loop, read, %Settings_Path%\logging\power.log
-{
-	LastLine := A_LoopReadLine
-}
-last_log =  %LastLine%
-
-proc_block_aon=No
-Loop, parse, AONProcesses, `,
-{
-	Process, Exist,  %A_LoopField%
-	if (Errorlevel > 0) {
-		proc_block_aon=Yes
-		If plist not contains %A_LoopField% 
-		{
-			running++
-			plist = %plist% %A_LoopField%
-			requests =%requests%`r`n[ALWAYS ON] %A_LoopField%
-		}
-	}
-}
-
-proc_block=No
-Loop, parse, Processes, `,
-{
-	Process, Exist,  %A_LoopField%
-	if (Errorlevel > 0) {
-		If plist not contains %A_LoopField% 
-		{
-			running++
-			plist = %plist% %A_LoopField%
-			requests =%requests%`r`n[PROCESS] %A_LoopField%
-		}
-		proc_block=Yes
-	}
-}
-
-
-vpproc:=0
-VPI=No
-if (VPIdle = 1)
-{
-	Loop, parse, WMCProcesses, `,
+	Lastline:=
+	Loop, read, %Settings_Path%\logging\power.log
 	{
-		Process, Exist, %A_LoopField%
+		LastLine := A_LoopReadLine
+	}
+	last_log =  %LastLine%
+
+	proc_block_aon=No
+	Loop, parse, AONProcesses, `,
+	{
+		Process, Exist,  %A_LoopField%
 		if (Errorlevel > 0) {
-			VPI=Yes
-			vpproc++
+			proc_block_aon=Yes
 			If plist not contains %A_LoopField% 
 			{
 				running++
 				plist = %plist% %A_LoopField%
-				requests =%requests%`r`n[MEDIA] %A_LoopField%
+				requests =%requests%`r`n[ALWAYS ON] %A_LoopField%
 			}
 		}
 	}
-}
 
-IfInstring, SAB_state, <state>Downloading</state>
-{
-	running++
-	SAB = Yes
-}
-else
-	SAB = No
-	
-tfilelist=
-Loop,Read,%Settings_Path%\logging\files.txt 
-{
-	if A_LoopReadLine contains %Extensions%
+	proc_block=No
+	Loop, parse, Processes, `,
 	{
-		ts := SubStr(A_LoopReadLine, 13)
-		If tfilelist not contains %ts% 
-			tfilelist = %ts%`r`n%tfilelist%
+		Process, Exist,  %A_LoopField%
+		if (Errorlevel > 0) {
+			If plist not contains %A_LoopField% 
+			{
+				running++
+				plist = %plist% %A_LoopField%
+				requests =%requests%`r`n[PROCESS] %A_LoopField%
+			}
+			proc_block=Yes
+		}
 	}
-}
 
-Sort, tfilelist, U
-filelist=%tfilelist%
-temp_file:=0
-Loop, parse, filelist, `n, `r  ; Specifying `n prior to `r allows both Windows and Unix files to be parsed.
-{
-	ifInstring, A_LoopField, .
+
+	vpproc:=0
+	VPI=No
+	if (VPIdle = 1)
 	{
+		Loop, parse, WMCProcesses, `,
+		{
+			Process, Exist, %A_LoopField%
+			if (Errorlevel > 0) {
+				VPI=Yes
+				vpproc++
+				If plist not contains %A_LoopField% 
+				{
+					running++
+					plist = %plist% %A_LoopField%
+					requests =%requests%`r`n[MEDIA] %A_LoopField%
+				}
+			}
+		}
+	}
+
+
+	tfilelist=
+	Loop,Read,%Settings_Path%\logging\files.txt 
+	{
+		if A_LoopReadLine contains %Extensions%
+		{
+			ts := SubStr(A_LoopReadLine, 13)
+			If tfilelist not contains %ts% 
+				tfilelist = %ts%`r`n%tfilelist%
+		}
+	}
+
+	Sort, tfilelist, U
+	filelist=%tfilelist%
+	temp_file:=0
+	Loop, parse, filelist, `n, `r  ; Specifying `n prior to `r allows both Windows and Unix files to be parsed.
+	{
+		ifInstring, A_LoopField, .
+		{
+			running++
+			temp_file++
+		}
+	}
+	psfile=%temp_file%
+
+	schedule= No
+	FormatTime, cur_hour,,HH
+	cur_hour := cur_hour * 1
+	if (cur_hour=0)
+		cur_hour=24
+	if (ScheduledOn%cur_hour% = 1) {
+		schedule=Yes
 		running++
-		temp_file++
 	}
-}
-psfile=%temp_file% files
+	TimeIdle := floor(A_TimeIdle*1/1000)
+	FormatTime, last_refresh,,MM/dd HH:mm
+	;MsgBox, WMCDelay: %WMCDelay% WMCIdle %WMCIDleD%:%WMCIDleH%:%WMCIDlem% / %WMCIDle%
+	;If always on processes are going, reset
+	if (proc_block_aon = "Yes") {
+		GoSub, Reset
+		Menu, Tray, Icon, %A_ScriptDir%\icons\running.ico
 
-schedule= No
-FormatTime, cur_hour,,HH
-cur_hour := cur_hour * 1
-if (cur_hour=0)
-	cur_hour=24
-if (ScheduledOn%cur_hour% = 1) {
-	schedule=Yes
-	running++
-}
-TimeIdle := floor(A_TimeIdle*1/1000)
-FormatTime, last_refresh,,MM/dd HH:mm
-;MsgBox, WMCDelay: %WMCDelay% WMCIdle %WMCIDleD%:%WMCIDleH%:%WMCIDlem% / %WMCIDle%
-;If always on processes are going, reset
-if (proc_block_aon = "Yes") {
-	GoSub, Reset
-	Menu, Tray, Icon, running.ico
-
-; If Media player idle is enabled and a media player is running	
-} else If ((vpproc > 0 ) && (VPIdle = 1) && (vpproc = running)){
-	if (TimeIdle > (WMCDelay-Delaysec))
-	{
-		ScheduledOn:=1
-		SetTimer, UpdateOSD, 1000
-		SetTimer, TimerLoop, 1000
-		Menu, Tray, Icon, sleep.ico
-		DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
-	} else {
+	; If Media player idle is enabled and a media player is running	
+	} else If ((vpproc > 0 ) && (VPIdle = 1) && (vpproc = running)){
+		if (TimeIdle > (WMCDelay-Delaysec))
+		{
+			ScheduledOn:=1
+			SetTimer, UpdateOSD, 1000
+			SetTimer, TimerLoop, 1000
+			Menu, Tray, Icon, %A_ScriptDir%\icons\sleep.ico
+			DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
+		} else {
+			GoSub, Reset
+			if (schedule = "Yes")
+				Menu, Tray, Icon, %A_ScriptDir%\icons\running.ico
+			else
+				Menu, Tray, Icon, %A_ScriptDir%\icons\normal.ico
+		}
+	} else if (ForcedSleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) {
+		;MsgBox, %proc_block_aon%
+		; If always on processes are going, don't sleep
+		if (aonshare = 1 && temp_file > 0) {
+			GoSub, Reset
+			if (schedule = "Yes")
+				Menu, Tray, Icon, %A_ScriptDir%\icons\running.ico
+			else 
+				Menu, Tray, Icon, %A_ScriptDir%\icons\normal.ico
+		; Otherwise go to sleep
+		} else {
+			FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm 
+			;FileAppend, %timestart% - Force Sleep Schedule `r`n, %Settings_Path%\logging\power.log
+			ScheduledOn:=1
+			SetTimer, UpdateOSD, 1000
+			SetTimer, TimerLoop, 1000
+			Menu, Tray, Icon, %A_ScriptDir%\icons\sleep.ico
+			; Turn off system requested
+			DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
+		}
+	; Normal hours, processes are running
+	} else if ((running > 0) || (A_TimeIdle < 10000)) {
 		GoSub, Reset
 		if (schedule = "Yes")
-			Menu, Tray, Icon, running.ico
+			Menu, Tray, Icon, %A_ScriptDir%\icons\running.ico
 		else
-			Menu, Tray, Icon, normal.ico
-	}
-} else if (ForcedSleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) {
-	;MsgBox, %proc_block_aon%
-	; If always on processes are going, don't sleep
-	if (aonshare = 1 && temp_file > 0) {
-		GoSub, Reset
-		if (schedule = "Yes")
-			Menu, Tray, Icon, running.ico
-		else 
-			Menu, Tray, Icon, normal.ico
-	} else if ((aonSAB = 1) && (SAB = "Yes")) {
-		GoSub, Reset
-		if (schedule = "Yes")
-			Menu, Tray, Icon, running.ico
-		else 
-			Menu, Tray, Icon, normal.ico
-	; Otherwise go to sleep
+			Menu, Tray, Icon, %A_ScriptDir%\icons\normal.ico
+
+	; Otherwise time to sleep		
 	} else {
-		FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm 
-		;FileAppend, %timestart% - Force Sleep Schedule `r`n, %Settings_Path%\logging\power.log
 		ScheduledOn:=1
 		SetTimer, UpdateOSD, 1000
 		SetTimer, TimerLoop, 1000
-		Menu, Tray, Icon, sleep.ico
-		; Turn off system requested
+		Menu, Tray, Icon, %A_ScriptDir%\icons\sleep.ico
 		DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
 	}
-; Normal hours, processes are running
-} else if ((running > 0) || (A_TimeIdle < 10000)) {
-	GoSub, Reset
-	if (schedule = "Yes")
-		Menu, Tray, Icon, running.ico
-	else
-		Menu, Tray, Icon, normal.ico
-
-; Otherwise time to sleep		
-} else {
-	ScheduledOn:=1
-	SetTimer, UpdateOSD, 1000
-	SetTimer, TimerLoop, 1000
-	Menu, Tray, Icon, sleep.ico
-	DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
-}
-if (Visible = 1)
-{
-	GuiControl,, Update, Updated: %last_refresh%
-	GuiControl,, plistT,%plist%
-	GuiControl,, proc_reqT,%proc_req%
-	GuiControl,, aonprocessT,%proc_block%/%proc_block_aon%
-	GuiControl,, SABT,%SAB%
-	GuiControl,, VPIT,%VPI%
-	GuiControl,, WHST,%WHS%
-	GuiControl,, psfileT,%psfile%
-	GuiControl,, scheduleT,%schedule%
-	GuiControl,, MyEdit,%requests%
-	GuiControl,, FileListGUI,%filelist%
-	GuiControl,, IdleStatus,Idle %TimeIdle% seconds
-	GuiControl,, RunStatus,%running% blockers
-	GuiControl,, LastEvent,%last_log%
-	WinGetPos, xPos, yPos, winW, winH, Power
-	IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-	IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
-}
-Menu,Tray,Tip, Power: %running% blockers
-
+	Menu,Tray,Tip, Power: %running% blockers
+	if (debugMode = 1) {
+		ToolTip, Running: %running% / PCFG/PROC/AON: %proc_req%/%proc_block%/%proc_block_aon% Sharing: %psfile% Schedule: %schedule% Backup: %WHS% Video: %VPI%,0,0
+	} else {
+		ToolTip
+	}
 return
 
 TimerLoop:
-if IdlePercent = 100
-{
-	;MsgBox,0,Warning,Windows will now go to sleep,3
-	if (Visible = 1)
+	if IdlePercent = 100
 	{
-		WinGetPos, xPos, yPos, winW, winH, Power
-		IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-		IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
+		;MsgBox,0,Warning,Windows will now go to sleep,3
+		GoSub, SLEEP
 	}
-	GoSub, SLEEP
-}
-Return
+return
 
 SLEEP:
 	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
@@ -451,14 +411,14 @@ SLEEP:
 			Process, Close, %A_LoopField%
 		}
 	}
-	RunWait, sleep.exe
+	RunWait, %A_ScriptDir%\scripts\sleep.exe
 	Sleep, %RefreshInt%
 	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 	FileAppend, %timestart% - Resumed`r`n, %Settings_Path%\logging\power.log
 	MouseMove, 1 , 1,, R
 	MouseMove, -1,-1,, R
 	GoSub, Reset
-Return
+return
 
 SleepNow:
 	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
@@ -473,23 +433,23 @@ SleepNow:
 return
 
 UpdateOSD:
-mysec := EndTime
-EnvSub, mysec, %A_Now%, seconds
-var := FormatSeconds( mysec )
-IdlePercent := ((StartTime-mysec)/StartTime)*100
-IdlePercent := Floor(IdlePercent)
-if (IdlePercent > 100 || IdlePercent < 0) {
-	return
-}
-If (ScheduledOn = 1 or var < 30) {
-	if (IdleRound > 3 ) {
-		; Change icon
-	} else {
-		IdleRound++
+	mysec := EndTime
+	EnvSub, mysec, %A_Now%, seconds
+	var := FormatSeconds( mysec )
+	IdlePercent := ((StartTime-mysec)/StartTime)*100
+	IdlePercent := Floor(IdlePercent)
+	if (IdlePercent > 100 || IdlePercent < 0) {
+		return
 	}
-} else {
-	IdleRound:= 0
-}
+	If (ScheduledOn = 1 or var < 30) {
+		if (IdleRound > 3 ) {
+			; Change icon
+		} else {
+			IdleRound++
+		}
+	} else {
+		IdleRound:= 0
+	}
 return
 
 FormatSeconds(NumberOfSeconds)  ; Convert the specified number of seconds to hh:mm:ss format.
@@ -503,318 +463,97 @@ FormatSeconds(NumberOfSeconds)  ; Convert the specified number of seconds to hh:
 }
 
 Reset:
-SetTimer, UpdateOSD, off
-SetTimer, TimerLoop, off
-StringMid ,DelayD, Delay,1, 2
-StringMid ,DelayH, Delay,3, 2
-StringMid ,Delaym, Delay,5, 2
-Delaysec := (DelayD*86400)+(DelayH*3600)+(Delaym*60)
+	SetTimer, UpdateOSD, off
+	SetTimer, TimerLoop, off
+	StringMid ,DelayD, Delay,1, 2
+	StringMid ,DelayH, Delay,3, 2
+	StringMid ,Delaym, Delay,5, 2
+	Delaysec := (DelayD*86400)+(DelayH*3600)+(Delaym*60)
 
-StringMid ,WMCIdleD, WMCIdle,1, 2
-StringMid ,WMCIdleH, WMCIdle,3, 2
-StringMid ,WMCIdlem, WMCIdle,5, 2
-WMCDelay := (WMCIdleD*86400)+(WMCIdleH*3600)+(WMCIdlem*60)
+	StringMid ,WMCIdleD, WMCIdle,1, 2
+	StringMid ,WMCIdleH, WMCIdle,3, 2
+	StringMid ,WMCIdlem, WMCIdle,5, 2
+	WMCDelay := (WMCIdleD*86400)+(WMCIdleH*3600)+(WMCIdlem*60)
 
-StartTime = %A_Now%
-EndTime = %A_Now%
-EnvAdd EndTime, Delaysec, seconds
-EnvSub StartTime, EndTime, seconds
+	StartTime = %A_Now%
+	EndTime = %A_Now%
+	EnvAdd EndTime, Delaysec, seconds
+	EnvSub StartTime, EndTime, seconds
 
-StartTime := Abs(StartTime)
-StartVideoTime := Abs(StartVideoTime)
-IdlePercent := 0 ;Resets percentage to 0, otherwise this loop never sees the counter reset
-ScheduledOn:=0
-IdleRound:=0
-var:=
-DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
+	StartTime := Abs(StartTime)
+	StartVideoTime := Abs(StartVideoTime)
+	IdlePercent := 0 ;Resets percentage to 0, otherwise this loop never sees the counter reset
+	ScheduledOn:=0
+	IdleRound:=0
+	var:=
+	DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 return
 
-~LButton::
-MouseGetPos,,, ID,,2
-WinGetClass, Class, ahk_id %ID%
-IfNotEqual, Class, tooltips_class32, Return
-WinGet, style, style, ahk_id %ID% 
-If ! ( style & 0x40 )
-     Return
-GoSub, Reset
-Return
+; Functions related to the traymenu
 
-SETTINGS:
-Gui, destroy
-if (Visible =1) {
-	;FileRead, requests, %Settings_Path%\logging\requests.txt
-	Gui, +ToolWindow
-
-	Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings
-	Gui, Font,,
-	Gui, Font,Bold,
-	Gui, Add, Text,section,Last Event: 
-	Gui, Font,,
-	Gui, Add, Text,xm+100 yp vLastEvent w400,%last_log%
-	Gui, Font,,
-	;Gui, Add, Text,xs,Processes: 
-	;Gui, Add, Edit,w490 r1 +Readonly xm+80 yp-2 vplistT,%plist%
-	;Gui, Font,,
-	Gui, Add, Text,xs,PowerCfg Processes: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vproc_reqT w50,%proc_req%
-	Gui, Font,,
-	Gui, Add, Text,xs,Custom/Always on Processes: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vaonprocessT w50,%proc_block%/%proc_block_aon%
-	Gui, Font,,
-	Gui, Add, Text,xs,Shared Media: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
-	Gui, Font,,
-	Gui, Add, Text,xs yp+20,Process blocking: 
-	Gui, Font,,
-	Gui, Font,, Consolas
-	Gui, Add, Edit, xs w560 r16 +Readonly -VScroll vMyEdit section, %requests%
-	Gui, Font,,
-	Gui, Font,Bold,
-	Gui, Add, Text,xs,File Requests:
-	Gui, Font,,
-	Gui, Font,, Consolas
-	Gui, Add, Edit, w560 r14 +Readonly -VScroll vFileListGUI section, %filelist%
-	Gui, Font,,
-
-	; Column 2
-	Gui, Font,,
-	Gui, Add, Text,section xp+360 ym+62,Schedule: 
-	Gui, Font,,
-	Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
-	Gui, Font,,
-	Gui, Add, Text,xs,Windows backup on: 
-	Gui, Font,,
-	Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
-	Gui, Font,,
-	Gui, Add, Text,xs,Media player processes: 
-	Gui, Font,,
-	Gui, Add, Text,xp+150 yp vVPIT w50,%VPI%
-	Gui, Font,,
-
-	Gui, Tab, 2
-	Gui, Font,Bold,
-	Gui, Add, Text,,Scheduling:
-	Gui, Font,,
-	Gui, Add, Text,,Always On Schedule:
-	Gui, Add, Text,yp+43,Forced Sleep Schedule:
-	Gui, Add, Text,,
-	Gui, Font,Bold,
-	Gui, Add, Text,,Keep Awake Monitoring Settings:
-	Gui, Font,,
-	Gui, Add, Text,section,powercfg /requests:
-	Gui, Add, Text,,Idle before standby: 
-	Gui, Add, Text,,Monitor shared files:
-	Gui, Add, Text,,Extensions to monitor:
-	Gui, Add, Text,,Processes:
-	Gui, Add, Text,,Ignore processes:
-	Gui, Add, Text,,Always on processes:
-	Gui, Add, Text,,Media Players:
-	Gui, Add, Text,,Media idle before standby:
-	Gui, Font,Bold,
-	Gui, Add, Text,,Other:
-	Gui, Font,,
-	Gui, Add, Button, default xm+13 yp+30 gButtonSave, Save Settings
-	Gui, Add, Button, default xm+150 yp gButtonLog, Wake Log
-
-	;Gui, Add, Button, yp+30 gRESTARTMYSQL, Restart MySQL
-		
-
-	; Column 2
-	;Gui, Add, Edit, vUpHours r1 w400 xm+150 ym+25, %UpHours%
-
-	ab:= 1
-	xx:= 150
-	While ab < 13
+TrayMenu:
+	Suspend, Permit
+	Menu,Tray,NoStandard 
+	Menu,Tray,DeleteAll
+	Menu,Tray,Add, Sleep, SLEEPNOW
+	Menu,Tray,Add,Debug,DebugToggle
+	if (debugMode = 1)
 	{
-		if (ScheduledOn%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+47 vScheduledOn%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+47 vScheduledOn%ab%, %ab%
-		ab++
-		xx+=35
+		Menu,Tray,Check,Debug
 	}
-	xx:= 150
-	While ab < 25
-	{
-		if (ScheduledOn%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+67 vScheduledOn%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+67 vScheduledOn%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	; Sleep Hours
-	ab:= 1
-	xx:= 150
-	While ab < 13
-	{
-		if (ForcedSleep%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+92 vForcedSleep%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+92 vForcedSleep%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	xx:= 150
-	While ab < 25
-	{
-		if (ForcedSleep%ab%=1)
-			Gui, Add, Checkbox, x%xx% ym+112 vForcedSleep%ab% checked, %ab%
-		else 
-			Gui, Add, Checkbox, x%xx% ym+112 vForcedSleep%ab%, %ab%
-		ab++
-		xx+=35
-	}
-	; Power Config Settings
-	if (PCFG_Process=1)
-		Gui, Add, Checkbox, xs+130 ys vPCFG_Process checked, Processes
-	else 
-		Gui, Add, Checkbox, xs+130 ys vPCFG_Process, Processes
-	if (PCFG_Service=1)
-		Gui, Add, Checkbox, xp+100 yp vPCFG_Service checked, Services
-	else 
-		Gui, Add, Checkbox, xp+100 yp vPCFG_Service, Services
-	if (PCFG_Driver=1)
-		Gui, Add, Checkbox, xp+100 yp vPCFG_Driver checked, Drivers
-	else 
-		Gui, Add, Checkbox, xp+100 yp vPCFG_Driver, Drivers
-	if (WHS_Backup=1)
-		Gui, Add, Checkbox, xp+100 yp vWHS_Backup checked, Windows Backup
-	else 
-		Gui, Add, Checkbox, xp+100 yp vWHS_Backup, Windows Backup
+	Menu,Tray,Add
+	Menu,Tray,Add,Reset,Reload
+	if (!A_iscompiled)
+		Menu,Tray,Add,Edit Script, EditScript
 
-	; Idle
-	Gui, Add, Edit, vDelay r1 w100 xs+130 yp+25, %Delay%
-	Gui, Add, Text, yp+3 xs+255, (DDHHMM)              Refresh Interval (ms):
-	Gui, Add, Edit, vRefreshInt r1 w100 xp+200 yp-2, %RefreshInt%
-
-	if (SharedFiles=1)
-		Gui, Add, Checkbox, xs+130 yp+28 vSharedFiles checked,
-	else 
-		Gui, Add, Checkbox, xs+130 yp+28 vSharedFiles, 	
-	Gui, Add, Text,xs+330 yp,Always on when sharing:
-	if (aonshare=1)
-		Gui, Add, Checkbox, xm+470 yp+2 vaonshare checked,
-	else 
-		Gui, Add, Checkbox, xm+470 yp+2 vaonshare, 	
-	Gui, Add, Edit, vExtensions r1 w425 xs+130 yp+20, %Extensions%
-		
-	Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
-	Gui, Add, Edit, vIgnoreProcesses r1 w425 yp+28, %IgnoreProcesses%
-	Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
-	Gui, Add, Edit, vWMCProcesses r1 w425 xs+130 yp+28, %WMCProcesses%
-	Gui, Add, Edit, vWMCIdle r1 w100 xs+130 yp+26, %WMCIdle%
-	Gui, Add, Text, yp+6 xs+255, (DDHHMM)                Monitor Video Idle:
-	if (VPIdle=1)
-		Gui, Add, Checkbox, xm+470 yp vVPIdle checked,
-	else 
-		Gui, Add, Checkbox, xm+470 yp vVPIdle, 
-
-	Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
-	Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
-	Gui, Add, Text, ym x475 vUpdate, Updated: %last_refresh%
-	;Gui, Add, Button, yp xm+475 w50 gKILL vKillBtn disabled, Restart
-
-	if (xPos > 0 && yPos > 0)
-		Gui, Show, x%xPos% y%yPos% h620 w600, Power
-	else
-		Gui, Show, x145 y100 h620 w600, Power
-}
+	Menu,Tray,Add, Exit, Exit
+	Menu,Tray,Tip, Power: %running% blockers
+	Menu,Tray, Icon, %A_ScriptDir%\icons\normal.ico,1
 return
 
-GuiClose:
-WinGetPos, xPos, yPos, winW, winH, Power
-IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
-Visible = 0
-IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
-Gui, destroy
-return
+DebugToggle:
+	if (debugMode = 1) {
+		debugMode = 0
+		Menu,Tray,Uncheck,Debug
+	} else {
+		debugMode = 1
+		Menu,Tray,Check,Debug
+	}
+	IniWrite, %debugMode%, %A_ScriptDir%\power.ini, Display, debugMode
+return	
 
-ButtonLog:
-Run, %Settings_Path%\logging\power.log
-return
 
-ButtonSave:
-WinGetPos, xPos, yPos, winW, winH, Power
-IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
-Gui, Submit
-
-IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
-IniWrite, %SharedFiles%, %Settings_Path%\power.ini, Sleep, SharedFiles
-StringReplace, Processes, Processes, `,%A_Space%,`,,ALL
-StringReplace, Processes, Processes, %A_Space%`,,`,,ALL
-StringLower, Processes, Processes
-IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
-IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
-IniWrite, %AONProcesses%, %Settings_Path%\power.ini, Sleep, AONProcesses
-IniWrite, %Extensions%, %Settings_Path%\power.ini, Sleep, Extensions
-;IniWrite, %UpHours%, %Settings_Path%\power.ini, Sleep, UpHours
-;Gui settings
-IniWrite, %RefreshInt%, %Settings_Path%\power.ini, GUI, RefreshInt
-; Video Watching idle settings
-IniWrite, %VPIdle%, %Settings_Path%\power.ini, Video, VPIdle
-IniWrite, %WMCProcesses%, %Settings_Path%\power.ini, Video, WMCProcesses
-IniWrite, %WMCIdle%, %Settings_Path%\power.ini, Video, WMCIdle
-IniWrite, %WHS_Backup%, %Settings_Path%\power.ini, Sleep, WHS_Backup
-IniWrite, %PCFG_Process%, %Settings_Path%\power.ini, Sleep, PCFG_Process
-IniWrite, %PCFG_Service%, %Settings_Path%\power.ini, Sleep, PCFG_Service
-IniWrite, %PCFG_Driver%, %Settings_Path%\power.ini, Sleep, PCFG_Driver
-
-Loop, 24
+EditScript()
 {
-	IniWrite, % ScheduledOn%A_Index%, %Settings_Path%\power.ini, Schedule, ScheduledOn%A_Index%
-	IniWrite, % ForcedSleep%A_Index%, %Settings_Path%\power.ini, Schedule, ForcedSleep%A_Index%
+	Edit
+	return
 }
-IniWrite, %aonshare%, %Settings_Path%\power.ini, Always ON, aonshare
-IniWrite, %aonSAB%, %Settings_Path%\power.ini, Always ON, aonSAB
 
-temp_proc_parse=
-Loop, parse, Processes, `,
+Reload() 
 {
-	IfNotInstring, AONProcesses, %A_LoopField% 
-		temp_proc_parse=%temp_proc_parse%,%A_LoopField% 
-}
-Processes := SubStr(temp_proc_parse, 2)
-IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
-
-GoSub, Reload
-return
-
-RELOAD: 
 	Suspend, Permit
 	Reload
-return
-
-TOGGLE:
-;menu, Tray, ToggleCheck, Show GUI
-if (Visible = 1) {
-	Visible = 0
-	WinGetPos, xPos, yPos, winW, winH, Power
-	IniWrite, %xPos%, %Settings_Path%\power.ini, GUI, XPos
-	IniWrite, %yPos%, %Settings_Path%\power.ini, GUI, YPos
+	return
 }
-else {
-	Visible = 1
+
+Exit()
+{
+	DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
+	ExitApp
+	return
 }
-IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
-GoSub, SETTINGS
-Return
 
-
-
-Exit:
-DllCall("SetThreadExecutionState","UInt",ES_CONTINUOUS)
-ExitApp
-Return
+AHK_NOTIFYICON(wParam, lParam)
+{
+   if (lParam = 0x201 or lParam = 0x203) ; Click or double click
+   {
+      GoSub, DebugToggle
+      Return 0
+   }
+}
 
 ; Disable ALT+F4
 #IfWinActive Power ahk_class AutoHotkeyGUI
 !F4::
 #IfWinActive
-
 ;
