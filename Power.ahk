@@ -4,19 +4,19 @@
 #KeyHistory 0
 #SingleInstance force
 #Persistent
-if not A_IsAdmin {
-   Run *RunAs "%A_ScriptFullPath%"  ; Requires v1.0.92.01+
-   ExitApp
-}
-GoSub, InitializeSettings
 
-; Tray Menu
-GoSub, TrayMenu 
-GoSub, StatusCheck
-SetTimer, StatusCheck, %RefreshInt%
+PowerAutoExec:
+	if not A_IsAdmin {
+	   ;Run *RunAs "%A_ScriptFullPath%"
+	   MsgBox,16,Error,This script requires admin permission.  Right click and select "Run as Administrator",10
+	   ExitApp
+	}
+	GoSub, InitializeSettings
 
-FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-FileAppend, %timestart% - Application Started`r`n, %Settings_Path%\logging\power.log
+	; Tray Menu
+	GoSub, TrayMenu 
+	GoSub, StatusCheck
+	SetTimer, StatusCheck, %RefreshInt%
 return
 
 StatusCheck:
@@ -339,6 +339,9 @@ InitializeSettings:
 	EnvSub StartTime, EndTime, seconds
 
 	StartTime := Abs(StartTime)
+
+	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
+	FileAppend, %timestart% - Application Started`r`n, %Settings_Path%\logging\power.log
 return
 
 CheckPowerCFG:
