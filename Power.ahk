@@ -3,7 +3,6 @@
 #HotkeyInterval 99000000
 #KeyHistory 0
 #SingleInstance force
-#Include %A_ScriptDir%\lib\emby.ahk
 #Include %A_ScriptDir%\lib\traymenu.ahk
 ListLines Off
 Process, Priority, , A
@@ -40,17 +39,10 @@ IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
 IniRead, SharedFiles, %Settings_Path%\power.ini, Sleep, SharedFiles, 1
 IniWrite, %SharedFiles%, %Settings_Path%\power.ini, Sleep, SharedFiles
 
-IniRead, Emby, %Settings_Path%\power.ini, Sleep, Emby, 1
-IniWrite, %Emby%, %Settings_Path%\power.ini, Sleep, Emby
-IniRead, Emby_URL, %Settings_Path%\power.ini, Sleep, Emby_URL, http://localhost:8096
-IniWrite, %Emby_URL%, %Settings_Path%\power.ini, Sleep, Emby_URL
-IniRead, Emby_API, %Settings_Path%\power.ini, Sleep, Emby_API, 
-IniWrite, %Emby_API%, %Settings_Path%\power.ini, Sleep, Emby_API
-
 IniRead, Processes, %Settings_Path%\power.ini, Sleep, Processes, postprocess.exe,comskip.exe,ffmpeg.exe
 IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
 
-IniRead, IgnoreProcesses, %Settings_Path%\power.ini, Sleep, IgnoreProcesses, MediaBrowser.ServerApplication.exe
+IniRead, IgnoreProcesses, %Settings_Path%\power.ini, Sleep, IgnoreProcesses, EmbyServer.exe
 IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
 
 IniRead, AONProcesses, %Settings_Path%\power.ini, Sleep, AONProcesses, teracopy.exe
@@ -91,8 +83,6 @@ IniRead, Visible, %Settings_Path%\power.ini, GUI, Visible, 1
 IniWrite, %Visible%, %Settings_Path%\power.ini, GUI, Visible
 IniRead, RefreshInt, %Settings_Path%\power.ini, GUI, RefreshInt, 60000
 IniWrite, %RefreshInt%, %Settings_Path%\power.ini, GUI, RefreshInt
-IniRead, ShowTray, %Settings_Path%\power.ini, GUI, ShowTray, 1
-IniWrite, %ShowTray%, %Settings_Path%\power.ini, GUI, ShowTray
 
 IniRead, xPos, %Settings_Path%\power.ini, GUI, XPos, 145
 IniRead, yPos, %Settings_Path%\power.ini, GUI, YPos, 100
@@ -119,7 +109,6 @@ schedule = No
 SAB = No
 WHS = No
 MB = No
-EMBYREC = No
 FormatTime, cur_hour,,HH
 filelist=
 proc_block=No
@@ -128,8 +117,6 @@ last_log=
 Max_Width=%A_ScreenWidth%
 Max_Height=%A_ScreenHeight%
 requests=
-Emby_Sessions=
-Emby_Recordings=
 
 ; Tray Menu
 BuildTrayMenu() 
@@ -250,9 +237,6 @@ if (WHS_Backup = 1)
 	WHS = No
 }
 
-if (Emby = 1) {
-	EmbyStatus(Emby_URL, Emby_API, Settings_Path)
-}
 
 Lastline:=
 Loop, read, %Settings_Path%\logging\power.log
@@ -319,15 +303,7 @@ IfInstring, SAB_state, <state>Downloading</state>
 }
 else
 	SAB = No
-
-; Emby server status
-EmbySessions=
-temp_MB=
-Emby_Sessions=
-Emby_Recordings= 
-if (Emby = 1) {
-	;GoSub, ExtractEmbyData
-}	
+	
 tfilelist=
 Loop,Read,%Settings_Path%\logging\files.txt 
 {
@@ -434,16 +410,12 @@ if (Visible = 1)
 	GuiControl,, proc_reqT,%proc_req%
 	GuiControl,, aonprocessT,%proc_block%/%proc_block_aon%
 	GuiControl,, SABT,%SAB%
-	GuiControl,, EmbySessionsT,%EmbySessions%
 	GuiControl,, VPIT,%VPI%
 	GuiControl,, WHST,%WHS%
-	GuiControl,, EmbyRecordingsT,%EmbyRecordings%
 	GuiControl,, psfileT,%psfile%
 	GuiControl,, scheduleT,%schedule%
 	GuiControl,, MyEdit,%requests%
 	GuiControl,, FileListGUI,%filelist%
-	GuiControl,, EmbyList,%Emby_Sessions%
-	GuiControl,, EmbyRecList,%Emby_Recordings%
 	GuiControl,, IdleStatus,Idle %TimeIdle% seconds
 	GuiControl,, RunStatus,%running% blockers
 	GuiControl,, LastEvent,%last_log%
@@ -507,23 +479,16 @@ var := FormatSeconds( mysec )
 IdlePercent := ((StartTime-mysec)/StartTime)*100
 IdlePercent := Floor(IdlePercent)
 if (IdlePercent > 100 || IdlePercent < 0) {
-	TrayTip
 	return
 }
 If (ScheduledOn = 1 or var < 30) {
 	if (IdleRound > 3 ) {
-		if (ShowTray = 1) {
-			TrayTip, Power, Time Remaining: %var%, 30,2
-			;FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
-			;FileAppend, %timestart% - Idle detected`r`n, %Settings_Path%\logging\power.log
-		}
-		;
+		; Change icon
 	} else {
 		IdleRound++
 	}
 } else {
 	IdleRound:= 0
-	;DllCall("SetThreadExecutionState","UInt", ES_SYSTEM_REQUIRED | ES_CONTINUOUS)
 }
 return
 
@@ -539,7 +504,6 @@ FormatSeconds(NumberOfSeconds)  ; Convert the specified number of seconds to hh:
 
 Reset:
 SetTimer, UpdateOSD, off
-TrayTip
 SetTimer, TimerLoop, off
 StringMid ,DelayD, Delay,1, 2
 StringMid ,DelayH, Delay,3, 2
@@ -581,7 +545,7 @@ if (Visible =1) {
 	;FileRead, requests, %Settings_Path%\logging\requests.txt
 	Gui, +ToolWindow
 
-	Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings|Emby
+	Gui, Add, Tab2,w580 h603 vmytab,Wake Status|Settings
 	Gui, Font,,
 	Gui, Font,Bold,
 	Gui, Add, Text,section,Last Event: 
@@ -603,13 +567,6 @@ if (Visible =1) {
 	Gui, Font,,
 	Gui, Add, Text,xm+180 yp vpsfileT w50,%psfile%
 	Gui, Font,,
-	Gui, Add, Text,xs,Emby Sessions: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vEmbySessionsT w150,%EmbySessions%
-	Gui, Add, Text,xs,Emby Recordings: 
-	Gui, Font,,
-	Gui, Add, Text,xm+180 yp vEmbyRecordingsT w50,%EmbyRecordings%
-	Gui, Font,Bold,
 	Gui, Add, Text,xs yp+20,Process blocking: 
 	Gui, Font,,
 	Gui, Font,, Consolas
@@ -628,7 +585,7 @@ if (Visible =1) {
 	Gui, Font,,
 	Gui, Add, Text, xp+150 yp vscheduleT w50,%schedule%
 	Gui, Font,,
-	Gui, Add, Text,xs,WHS backup on: 
+	Gui, Add, Text,xs,Windows backup on: 
 	Gui, Font,,
 	Gui, Add, Text,xp+150 yp vWHST w50,%WHS%
 	Gui, Font,,
@@ -654,8 +611,6 @@ if (Visible =1) {
 	Gui, Add, Text,,Processes:
 	Gui, Add, Text,,Ignore processes:
 	Gui, Add, Text,,Always on processes:
-	Gui, Add, Text,,Monitor Emby playstate:
-	Gui, Add, Text,,Emby URL:
 	Gui, Add, Text,,Media Players:
 	Gui, Add, Text,,Media idle before standby:
 	Gui, Font,Bold,
@@ -727,9 +682,9 @@ if (Visible =1) {
 	else 
 		Gui, Add, Checkbox, xp+100 yp vPCFG_Driver, Drivers
 	if (WHS_Backup=1)
-		Gui, Add, Checkbox, xp+100 yp vWHS_Backup checked, Backup Service (WHS)
+		Gui, Add, Checkbox, xp+100 yp vWHS_Backup checked, Windows Backup
 	else 
-		Gui, Add, Checkbox, xp+100 yp vWHS_Backup, Backup Service (WHS)
+		Gui, Add, Checkbox, xp+100 yp vWHS_Backup, Windows Backup
 
 	; Idle
 	Gui, Add, Edit, vDelay r1 w100 xs+130 yp+25, %Delay%
@@ -750,16 +705,6 @@ if (Visible =1) {
 	Gui, Add, Edit, vProcesses r1 w425 yp+28 xs+130, %Processes%
 	Gui, Add, Edit, vIgnoreProcesses r1 w425 yp+28, %IgnoreProcesses%
 	Gui, Add, Edit, vAONProcesses r1 w425 yp+28, %AONProcesses%
-
-	if (Emby=1)
-		Gui, Add, Checkbox,xs+130 yp+28 vEmby checked,
-	else 
-		Gui, Add, Checkbox,xs+130 yp+28 vEmby, 
-
-	Gui, Add, Edit, vEmby_URL r1 w180 yp+25 xs+130, %Emby_URL%
-	Gui, Add, Text, xp+190 yp+3, API:
-	Gui, Add, Edit, vEmby_API r1 w210 xp+25 yp-3, %Emby_API%
-
 	Gui, Add, Edit, vWMCProcesses r1 w425 xs+130 yp+28, %WMCProcesses%
 	Gui, Add, Edit, vWMCIdle r1 w100 xs+130 yp+26, %WMCIdle%
 	Gui, Add, Text, yp+6 xs+255, (DDHHMM)                Monitor Video Idle:
@@ -767,27 +712,6 @@ if (Visible =1) {
 		Gui, Add, Checkbox, xm+470 yp vVPIdle checked,
 	else 
 		Gui, Add, Checkbox, xm+470 yp vVPIdle, 
-
-	if (ShowTray=1)
-		Gui, Add, Checkbox, xs+130 yp+24 vShowTray checked, Enable Tray tip
-	else 
-		Gui, Add, Checkbox, xs+130 yp+24 vShowTray, Enable Tray tip
-
-	Gui, Tab, 3
-	Gui, Font,Bold,
-	Gui, Add, Text,section,Emby Sessions:
-	Gui, Font,,
-	Gui, Font,, Consolas
-	Gui, Add, Edit, xs w560 r20 +Readonly -VScroll vEmbyList section, %Emby_Sessions%
-	Gui, Font,,
-	Gui, Font,Bold,
-	Gui, Add, Text,section,Emby Recordings:
-	Gui, Font,,
-	Gui, Font,, Consolas
-	Gui, Add, Edit, xs w560 r19 +Readonly -VScroll vEmbyRecList section, %Emby_Recordings%
-	Gui, Font,,
-	;Close tab 
-	Gui, Tab
 
 	Gui, Add, Text, ym x200 w100 vIdleStatus, Idle %TimeIdle% seconds
 	Gui, Add, Text, ym x325 w100 vRunStatus, %running% blocking
@@ -822,9 +746,6 @@ Gui, Submit
 
 IniWrite, %Delay%, %Settings_Path%\power.ini, Sleep, Delay
 IniWrite, %SharedFiles%, %Settings_Path%\power.ini, Sleep, SharedFiles
-IniWrite, %Emby%, %Settings_Path%\power.ini, Sleep, Emby
-IniWrite, %Emby_URL%, %Settings_Path%\power.ini, Sleep, Emby_URL
-IniWrite, %Emby_API%, %Settings_Path%\power.ini, Sleep, Emby_API
 StringReplace, Processes, Processes, `,%A_Space%,`,,ALL
 StringReplace, Processes, Processes, %A_Space%`,,`,,ALL
 StringLower, Processes, Processes
@@ -835,7 +756,6 @@ IniWrite, %Extensions%, %Settings_Path%\power.ini, Sleep, Extensions
 ;IniWrite, %UpHours%, %Settings_Path%\power.ini, Sleep, UpHours
 ;Gui settings
 IniWrite, %RefreshInt%, %Settings_Path%\power.ini, GUI, RefreshInt
-IniWrite, %ShowTray%, %Settings_Path%\power.ini, GUI, ShowTray
 ; Video Watching idle settings
 IniWrite, %VPIdle%, %Settings_Path%\power.ini, Video, VPIdle
 IniWrite, %WMCProcesses%, %Settings_Path%\power.ini, Video, WMCProcesses
