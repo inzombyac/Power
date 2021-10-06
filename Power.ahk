@@ -319,8 +319,6 @@ InitializeSettings:
 	filelist=
 	processBlockers:=0
 	alwaysOnProcesses:=0
-	Max_Width=%A_ScreenWidth%
-	Max_Height=%A_ScreenHeight%
 	requests=
 
 	StringMid ,DelayD, Delay,1, 2
