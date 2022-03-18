@@ -87,7 +87,7 @@ StatusCheck:
 	Menu,Tray,Tip, Power: %running% blockers
 	if (DebugMode = 1) {
 		sched := ScheduledOn%cur_hour%
-		ToolTip, Blockers: %running% Idle: %isIdle% Idle time: %TimeIdle% Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%,0,0
+		ToolTip, Blockers: %running%  Idle: %isIdle%  Idle time: %TimeIdle%`r`nTimeout: %DelayH%(H) %DelayM%(M)   Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%,0,0
 	} else {
 		ToolTip
 	}
