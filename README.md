@@ -18,7 +18,7 @@ Power is an autohotkey script used to manage when a computer goes to sleep.  I h
 	* Red = The computer has no blockers and will sleep after the specfied interval
 
 ## Requirements
-The script is provided as an AutoHotkey script or a Windows .exe.  You can use either, but the program must be run as Admin in order to access the Windows power configuration information.
+The script is provided as an AutoHotkey script or a Windows .exe.  You can use either, but the program must be run as Admin in order to access the Windows power configuration information.  To use the shared files functionality, you must download a copy of [PsFile](https://docs.microsoft.com/en-us/sysinternals/downloads/psfile) and place it in the lib directory as Microsoft does not allow users to redistribute the file
 
 ## Settings
 After you launch the program for the first time a power.ini configuration file will be created.  This controls the application settings.  Here are the options you can configure:
