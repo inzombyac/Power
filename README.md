@@ -12,9 +12,9 @@ Power is an autohotkey script used to manage when a computer goes to sleep.  I h
 * Always on sleep schedule per hour (will always stay on even if idle)
 * Debug mode to see what is prenting sleep
 * Icon indicating the current system status
-** Green = The computer is scheduled to be always on at this time
-** Yellow = The computer has blockers preventing sleep
-** Red = The computer has no blockers and will sleep after the specfied interval
+	* Green = The computer is scheduled to be always on at this time
+	* Yellow = The computer has blockers preventing sleep
+	* Red = The computer has no blockers and will sleep after the specfied interval
 
 ## Requirements
 The script is provided as an AutoHotkey script or a Windows .exe.  You can use either, but the program must be run as Admin in order to access the Windows power configuration information.
