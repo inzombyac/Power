@@ -49,7 +49,7 @@ StatusCheck:
 				Menu, Tray, Icon, %A_ScriptDir%\icons\normal.ico
 		}
 	; Forced sleep schedule window
-	} else if (ForcedSleep%cur_hour% = 1 && (A_TimeIdle >= 10000)) {
+	} else if (ScheduledOn%cur_hour% = -1 && (A_TimeIdle >= 10000)) {
 		; If always on processes are going, don't sleep
 		if (AlwaysOnWhenSharing = 1 && temp_file > 0) {
 			GoSub, ResetIdleCounters
@@ -86,7 +86,8 @@ StatusCheck:
 	}
 	Menu,Tray,Tip, Power: %running% blockers
 	if (DebugMode = 1) {
-		ToolTip, Running: %running% Idle: %isIdle% Idle time: %TimeIdle% Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%,0,0
+		sched := ScheduledOn%cur_hour%
+		ToolTip, Blockers: %running% Idle: %isIdle% Idle time: %TimeIdle% Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%,0,0
 	} else {
 		ToolTip
 	}
@@ -306,8 +307,6 @@ InitializeSettings:
 	{
 		IniRead, ScheduledOn%A_Index%, %Settings_Path%\power.ini, Schedule, ScheduledOn%A_Index%, 0
 		IniWrite, % ScheduledOn%A_Index%, %Settings_Path%\power.ini, Schedule, ScheduledOn%A_Index%	
-		IniRead, ForcedSleep%A_Index%, %Settings_Path%\power.ini, Schedule, ForcedSleep%A_Index%, 0
-		IniWrite, % ForcedSleep%A_Index%, %Settings_Path%\power.ini, Schedule, ForcedSleep%A_Index%
 	}
 
 	; Display variables
