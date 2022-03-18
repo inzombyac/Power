@@ -266,8 +266,8 @@ InitializeSettings:
 	IniRead, IgnoreProcesses, %Settings_Path%\power.ini, Sleep, IgnoreProcesses, EmbyServer.exe
 	IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
 
-	IniRead, AONProcesses, %Settings_Path%\power.ini, Sleep, AONProcesses, teracopy.exe
-	IniWrite, %AONProcesses%, %Settings_Path%\power.ini, Sleep, AONProcesses
+	IniRead, AlwaysOnProcesses, %Settings_Path%\power.ini, Always ON, AlwaysOnProcesses, teracopy.exe
+	IniWrite, %AlwaysOnProcesses%, %Settings_Path%\power.ini, Always ON, AlwaysOnProcesses
 
 	IniRead, Extensions, %Settings_Path%\power.ini, Sleep, Extensions, .mkv,.avi,.wtv,.exe,.iso,.mp4,.wtv,.ts
 	IniWrite, %Extensions%, %Settings_Path%\power.ini, Sleep, Extensions
@@ -289,8 +289,8 @@ InitializeSettings:
 	IniRead, DebugMode, %A_ScriptDir%\power.ini, Display, DebugMode, 0
 	IniWrite, %DebugMode%, %A_ScriptDir%\power.ini, Display, DebugMode
 	; How ofter to poll idle status
-	IniRead, RefreshInt, %Settings_Path%\power.ini, GUI, RefreshInt, 30000
-	IniWrite, %RefreshInt%, %Settings_Path%\power.ini, GUI, RefreshInt
+	IniRead, RefreshInt, %Settings_Path%\power.ini, Display, RefreshInt, 30000
+	IniWrite, %RefreshInt%, %Settings_Path%\power.ini, Display, RefreshInt
 
 	; Media Watching idle settings
 	IniRead, MediaIdleEnabled, %Settings_Path%\power.ini, Media, MediaIdleEnabled, 1
@@ -419,7 +419,7 @@ return
 
 CheckRunningProcesses:
 	alwaysOnProcesses:=0
-	Loop, parse, AONProcesses, `,
+	Loop, parse, AlwaysOnProcesses, `,
 	{
 		Process, Exist,  %A_LoopField%
 		if (Errorlevel > 0) {
