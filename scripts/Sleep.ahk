@@ -11,7 +11,6 @@ if (time < 5 AND A_TimeIdle < 5000)
 {
 	ExitApp
 } else if (time < 1) {
-	;MsgBox,0,Warning,Windows will now go to sleep,3
 	DllCall("PowrProf\SetSuspendState", "int", 0, "int", 0, "int", 0)
 	ExitApp
 } else if (time = 5) {
