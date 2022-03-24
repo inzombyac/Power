@@ -33,7 +33,7 @@ StatusCheck:
 		GoSub, ResetIdleCounters
 		Menu, Tray, Icon, %A_ScriptDir%\icons\running.ico
 	; If Media player idle is enabled and a media player is running	
-	} else If ((mediaBlockers > 0 ) && (MediaIdleEnabled = 1) && (mediaBlockers = running)){
+	} else If (mediaBlockers > 0 && MediaIdleEnabled = 1 && mediaBlockers = running){
 		if (TimeIdle > (mediaDelay-Delaysec))
 		{
 			isIdle:=1
@@ -87,7 +87,7 @@ StatusCheck:
 	Menu,Tray,Tip, Power: %running% blockers
 	if (DebugMode = 1) {
 		sched := ScheduledOn%cur_hour%
-		ToolTip, Blockers: %running%  Idle: %isIdle%  Idle time: %TimeIdle%`r`nTimeout: %DelayH%(H) %DelayM%(M)   Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%,0,0
+		ToolTip, Blockers: %running%  Idle: %isIdle%  Idle time: %TimeIdle%`r`nTimeout: %DelayH%(H) %DelayM%(M)   Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%`r`nFullscreen: %isCurrentAppFullScreen%,0,0
 	} else {
 		ToolTip
 	}
@@ -336,10 +336,26 @@ InitializeSettings:
 	EnvSub StartTime, EndTime, seconds
 
 	StartTime := Abs(StartTime)
+	
+	isCurrentAppFullScreen := isFullScreen()
 
 	FormatTime, timestart, A_Now, yyyy-MM-dd HH:mm
 	FileAppend, %timestart% - Application Started`r`n, %Settings_Path%\logging\power.log
 return
+
+isFullScreen() {
+    WinGetClass, currentClass, A
+	WinGet, activeId, ID, A
+	WinGet, activeProcess, ProcessName, ahk_id %activeId%
+	WinGetPos,,, winWidth, winHeight, A
+	winHSize:= winWidth  / A_ScreenWidth 
+	winVSize:= winHeight / A_ScreenHeight
+	if (!activeId or activeProcess = "explorer.exe")
+        return false
+    WinGet style, Style, ahk_id %activeId%
+    ; Bordeless and not minimized and window size is screen dimensions
+    return ((style & 0x20800000) or winHeight < A_ScreenHeight or winWidth < A_ScreenWidth) ? false : true
+}
 
 CheckPowerCFG:
 	processRequest:=0
@@ -463,6 +479,11 @@ CheckRunningProcesses:
 					requests =%requests%`r`n[MEDIA] %A_LoopField%
 				}
 			}
+		}
+		isCurrentAppFullScreen := isFullScreen()
+		if (isCurrentAppFullScreen) {
+			mediaBlockers++
+			running++
 		}
 	}
 return
