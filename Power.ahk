@@ -26,6 +26,7 @@ StatusCheck:
 	GoSub, CheckRunningProcesses
 	GoSub, CheckSharedFiles
 	GoSub, CheckSchedules
+	GoSub, CheckScripts
 	
 	TimeIdle := floor(A_TimeIdle*1/1000)
 	;If always on processes are going, reset
@@ -87,7 +88,7 @@ StatusCheck:
 	Menu,Tray,Tip, Power: %running% blockers
 	if (DebugMode = 1) {
 		sched := ScheduledOn%cur_hour%
-		ToolTip, Blockers: %running%  Idle: %isIdle%  Idle time: %TimeIdle%`r`nTimeout: %DelayH%(H) %DelayM%(M)   Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%`r`nFullscreen: %isCurrentAppFullScreen%,0,0
+		ToolTip, Blockers: %running%  Idle: %isIdle%  Idle time: %TimeIdle%`r`nTimeout: %DelayH%(H) %DelayM%(M)   Media timeout: %MediaIdleTimeoutD%(D) %MediaIdleTimeoutH%(H) %MediaIdleTimeoutM%(M)`r`nPCFG/PROC/AON/SHARE/SCHED/MEDIA: %processRequest%/%processBlockers%/%alwaysOnProcesses%/%sharedFiles%/%scheduleBlockers%/%mediaBlockers%`r`n%blockingProcesses%`r`nSchedule: %sched%`r`nFullscreen: %isCurrentAppFullScreen%`r`n%Script1Output%,0,0
 	} else {
 		ToolTip
 	}
@@ -260,13 +261,13 @@ InitializeSettings:
 	IniRead, SharedFiles, %Settings_Path%\power.ini, Sleep, SharedFiles, 1
 	IniWrite, %SharedFiles%, %Settings_Path%\power.ini, Sleep, SharedFiles
 
-	IniRead, Processes, %Settings_Path%\power.ini, Sleep, Processes, postprocess.exe,comskip.exe,ffmpeg.exe
+	IniRead, Processes, %Settings_Path%\power.ini, Sleep, Processes, postprocess.exe,comskip.exe
 	IniWrite, %Processes%, %Settings_Path%\power.ini, Sleep, Processes
 
 	IniRead, IgnoreProcesses, %Settings_Path%\power.ini, Sleep, IgnoreProcesses, EmbyServer.exe
 	IniWrite, %IgnoreProcesses%, %Settings_Path%\power.ini, Sleep, IgnoreProcesses
 
-	IniRead, AlwaysOnProcesses, %Settings_Path%\power.ini, Always ON, AlwaysOnProcesses, teracopy.exe
+	IniRead, AlwaysOnProcesses, %Settings_Path%\power.ini, Always ON, AlwaysOnProcesses, teracopy.exe,ffmpeg.exe
 	IniWrite, %AlwaysOnProcesses%, %Settings_Path%\power.ini, Always ON, AlwaysOnProcesses
 
 	IniRead, Extensions, %Settings_Path%\power.ini, Sleep, Extensions, .mkv,.avi,.wtv,.exe,.iso,.mp4,.wtv,.ts
@@ -301,6 +302,12 @@ InitializeSettings:
 	if (MediaIdleTimeout < 0)
 		MediaIdleTimeout=000200
 	IniWrite, %MediaIdleTimeout%, %Settings_Path%\power.ini, Media, MediaIdleTimeout
+	
+	; Secondary script
+	IniRead, ScriptsEnabled, %Settings_Path%\power.ini, Scripts, ScriptsEnabled, 0
+	IniWrite, %ScriptsEnabled%, %Settings_Path%\power.ini, Scripts, ScriptsEnabled
+	IniRead, Script1, %Settings_Path%\power.ini, Scripts, Script1
+	IniWrite, %Script1%, %Settings_Path%\power.ini, Scripts, Script1
 
 	; Schedule
 	Loop, 24
@@ -319,6 +326,7 @@ InitializeSettings:
 	processBlockers:=0
 	alwaysOnProcesses:=0
 	requests=
+	Script1Output=
 
 	StringMid ,DelayD, Delay,1, 2
 	StringMid ,DelayH, Delay,3, 2
@@ -524,6 +532,19 @@ CheckSchedules:
 	if (ScheduledOn%cur_hour% = 1) {
 		scheduleBlockers++
 		running++
+	}
+return
+
+CheckScripts:
+	if (ScriptsEnabled = 1) {
+		runwait,%comspec% /c %Script1% > script1.txt,%Settings_Path%\logging,hide,
+		FileRead, Script1Output, %Settings_Path%\logging\script1.txt
+		if not ErrorLevel 
+		{
+			if (Script1Output != "") {
+				running++
+			}
+		}
 	}
 return
 
